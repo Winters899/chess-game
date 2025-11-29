@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chess Pro: Ultimate</title>
+    <style>
+        :root {
+            /* --- ЦВЕТА (Default: Classic) --- */
+            --panel-bg: rgba(40, 40, 40, 0.95);
+            --board-light: #ebecd0;
+            --board-dark: #779556;
+            --accent: #81b64c;
+            --text-color: #ffffff;
+            
+            /* Настраиваемые через JS переменные */
+            --highlight-opacity: 0.6;
+            --highlight-color: rgba(255, 255, 80, var(--highlight-opacity));
+
+            /* --- РАЗМЕРЫ --- */
+            --board-size: min(92vw, 80vh, 650px);
+            --sq-size: calc(var(--board-size) / 8);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+            overflow: hidden;
+            background: linear-gradient(-45deg, #0f1014, #1e2a36, #181818, #0a0a0a);
+            background-size: 400% 400%;
+            animation: gradientBG 25s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 10px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* --- ОБЕРТКА ДОСКИ --- */
+        .board-container {
+            position: relative;
+            padding: 25px; /* Место для координат */
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+        
+        /* КНОПКА ПЕРЕКЛЮЧЕНИЯ БОКОВОЙ ПАНЕЛИ */
+        .sidebar-toggle-btn {
+            position: absolute;
+            top: 5px; right: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            z-index: 10;
+            transition: background 0.2s, right 0.3s;
+        }
+        .sidebar-toggle-btn:hover { background: rgba(255, 255, 255, 0.2); }
+
+
+        /* Координаты */
+        .coords-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: none; /* Включаются в настройках */
+        }
+        .coords-overlay.visible { display: block; }
+        
+        .coord {
+            position: absolute;
+            font-size: 14px;
+            font-weight: bold;
+            opacity: 0.8;
+            color: #aaa;
+        }
+        /* Буквы (снизу) */
+        .coord-file { bottom: 4px; text-align: center; width: var(--sq-size); }
+        /* Цифры (слева) */
+        .coord-rank { left: 6px; display: flex; align-items: center; height: var(--sq-size); }
+
+        /* Сама сетка доски */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, var(--sq-size));
+            grid-template-rows: repeat(8, var(--sq-size));
+            border: 3px solid #333;
+        }
+
+        /* Поворот доски */
+        .rotated { transform: rotate(180deg); }
+        /* Чтобы цифры и фигуры не были вверх ногами при повороте */
+        .rotated .piece, .rotated .coord { transform: rotate(-180deg); }
+
+        .square {
+            width: var(--sq-size);
+            height: var(--sq-size);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .square.light { background-color: var(--board-light); color: var(--board-dark); }
+        .square.dark { background-color: var(--board-dark); color: var(--board-light); }
+        
+        .square.selected { background-color: var(--highlight-color) !important; }
+        .square.last-move { background-color: rgba(155, 255, 50, 0.3) !important; }
+        .square.in-check { background: radial-gradient(circle, #ff4d4d 0%, transparent 70%); }
+
+        .piece {
+            width: 90%; height: 90%;
+            z-index: 5;
+            transition: transform 0.2s;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+        }
+        .piece:active { transform: scale(1.15); }
+
+        /* Подсказки */
+        .hint-dot::after {
+            content: ''; position: absolute;
+            width: 25%; height: 25%;
+            background: rgba(0,0,0,0.25); border-radius: 50%;
+        }
+        .hint-ring::after {
+            content: ''; position: absolute;
+            width: 100%; height: 100%;
+            border: 4px solid rgba(0,0,0,0.2); border-radius: 50%; box-sizing: border-box;
+        }
+        .no-hints .hint-dot::after, .no-hints .hint-ring::after { display: none; }
+
+        /* --- БОКОВАЯ ПАНЕЛЬ --- */
+        .sidebar {
+            width: 100%;
+            max-width: 320px;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+            /* СТИЛЬ СКРЫТИЯ */
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .sidebar.hidden {
+            display: none; /* Скрыто по умолчанию */
+        }
+
+
+        /* Таймеры */
+        .timers-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        .timer-box {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .timer-box.active {
+            background: rgba(255,255,255,0.1);
+            border-bottom-color: var(--accent);
+            transform: scale(1.05);
+        }
+        .timer-time { font-family: monospace; font-size: 1.8rem; font-weight: bold; }
+        .timer-label { font-size: 0.8rem; opacity: 0.6; text-transform: uppercase; }
+
+        .status-bar {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+        }
+
+        .graveyard {
+            min-height: 32px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 5px;
+            display: flex; flex-wrap: wrap; gap: 2px;
+        }
+        .graveyard img { width: 22px; opacity: 0.7; }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        .btn {
+            background: #444; color: white; border: none;
+            padding: 12px; border-radius: 6px;
+            font-weight: bold; cursor: pointer;
+            transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-primary { background: var(--accent); grid-column: span 2; }
+        .btn:hover { filter: brightness(1.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- МОДАЛЬНОЕ ОКНО --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 100;
+            display: none; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-overlay.open { display: flex; opacity: 1; }
+        
+        .settings-panel {
+            background: #222; width: 90%; max-width: 450px;
+            border-radius: 12px; padding: 25px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            border: 1px solid #444;
+            max-height: 90vh; overflow-y: auto;
+        }
+
+        h2 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        
+        .setting-group { margin-bottom: 20px; }
+        .setting-group-title { font-size: 0.85rem; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px; }
+
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .setting-label { color: #ddd; }
+
+        /* UI Elements */
+        select, input[type="number"] {
+            background: #333; color: white; border: 1px solid #555;
+            padding: 5px 10px; border-radius: 4px; width: 80px; text-align: center;
+        }
+        input[type="range"] { width: 120px; }
+
+        /* Toggle Switch */
+        .switch { position: relative; width: 46px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #444; border-radius: 22px; transition: .3s;
+        }
+        .slider:before {
+            content: ""; position: absolute; height: 16px; width: 16px;
+            left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s;
+        }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        /* Media Queries */
+        @media (min-width: 950px) {
+            .main-container { flex-direction: row; align-items: flex-start; }
+            .sidebar { margin-top: 25px; }
+        }
+        @media (max-width: 500px) {
+            .board-container { padding: 15px; }
+            .timer-time { font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <div id="boardContainer" class="board-container">
+        <button id="toggleSidebarBtn" class="sidebar-toggle-btn" onclick="toggleSidebar()">&#9776;</button>
+        
+        <div id="coordsOverlay" class="coords-overlay"></div>
+        <div id="board"></div>
+    </div>
+
+    <div class="sidebar hidden" id="sidebar">
+        <div class="timers-container" id="timerSection">
+            <div id="timerW" class="timer-box active">
+                <div class="timer-label">Белые</div>
+                <div class="timer-time" id="timeDisplayW">10:00</div>
+            </div>
+            <div id="timerB" class="timer-box">
+                <div class="timer-label">Черные</div>
+                <div class="timer-time" id="timeDisplayB">10:00</div>
+            </div>
+        </div>
+
+        <div id="status" class="status-bar">Ход белых</div>
+        
+        <div><div id="graveyard-w" class="graveyard"></div></div>
+        <div><div id="graveyard-b" class="graveyard"></div></div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="initGame()">Новая игра</button>
+            <button class="btn" id="undoBtn" onclick="undoMove()" disabled>↩ Назад</button>
+            <button class="btn" onclick="openSettings()">⚙ Настройки</button>
+            <button class="btn" onclick="toggleSidebar()" style="grid-column: span 2;">&#10006; Скрыть панель</button> 
+        </div>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal-overlay" onclick="closeSettings(event)">
+    <div class="settings-panel" onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between;">
+            <h2>Настройки</h2>
+            <button onclick="closeSettings()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-group-title">Внешний вид</div>
+            <div class="setting-row">
+                <span class="setting-label">Тема доски</span>
+                <select id="themeSelect" onchange="updateSettings()">
+                    <option value="classic">Классика (Зеленый)</option>
+                    <option value="ocean">Океан (Синий)</option>
+                    <option value="graphite">Графит (Серый)</option>
+                    <option value="ruby">Рубин (Красный)</option>
+                    <option value="purple">Неон (Фиолетовый)</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Координаты (A-H, 1-8)</span>
+                <label class="switch"><input type="checkbox" id="coordsToggle" checked onchange="updateSettings()"><span class="slider"></span></label>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Яркость выделения</span>
+                <input type="range" id="highlightRange" min="10" max="90" value="60" oninput="updateSettings()">
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Авто-поворот доски</span>
+                <label class="switch"><input type="checkbox" id="rotateToggle" onchange="updateSettings()"><span class="slider"></span></label>
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-group-title">Правила и Помощь</div>
+            <div class="setting-row">
+                <span class="setting-label">Подсказка ходов (точки)</span>
+                <label class="switch"><input type="checkbox" id="hintsToggle" checked onchange="updateSettings()"><span class="slider"></span></label>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Звуковые эффекты</span>
+                <label class="switch"><input type="checkbox" id="soundToggle" checked onchange="updateSettings()"><span class="slider"></span></label>
+            </div>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-group-title">Контроль времени</div>
+            <div class="setting-row">
+                <span class="setting-label">Включить таймер</span>
+                <label class="switch"><input type="checkbox" id="timerToggle" checked onchange="toggleTimerSettings()"><span class="slider"></span></label>
+            </div>
+            <div id="timerOptions">
+                <div class="setting-row">
+                    <span class="setting-label">Время на партию (мин)</span>
+                    <input type="number" id="timeInput" value="10" min="1" max="180">
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">Добавка (сек/ход)</span>
+                    <input type="number" id="incrementInput" value="0" min="0" max="60">
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%" onclick="applyAndClose()">Применить и Начать заново</button>
+    </div>
+</div>
+
+<script>
+    /* --- ДВИЖОК ИГРЫ --- */
+    
+    // Элементы DOM
+    const boardEl = document.getElementById('board');
+    const boardContainer = document.getElementById('boardContainer');
+    const coordsOverlay = document.getElementById('coordsOverlay');
+    const statusEl = document.getElementById('status');
+    const undoBtn = document.getElementById('undoBtn');
+    
+    // ДОБАВЛЕННЫЕ ЭЛЕМЕНТЫ
+    const sidebarEl = document.getElementById('sidebar');
+    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+    
+    // Состояние
+    let board = [];
+    let turn = 'w';
+    let selected = null;
+    let gameOver = false;
+    let lastMove = null;
+    let history = []; // Стек для Undo
+
+    // Таймер
+    let timerInterval = null;
+    let times = { w: 600, b: 600 }; // секунды
+    let timeConfig = { active: true, start: 10, inc: 0 };
+
+    // Настройки
+    const SETTINGS = {
+        theme: 'classic',
+        hints: true,
+        coords: true,
+        sound: true,
+        autoRotate: false,
+        highlightOpacity: 0.6
+    };
+
+    const THEMES = {
+        classic: { l: '#ebecd0', d: '#779556', a: '#81b64c' },
+        ocean:   { l: '#dee3e6', d: '#8ca2ad', a: '#6b8e9e' },
+        graphite:{ l: '#e0e0e0', d: '#707070', a: '#909090' },
+        ruby:    { l: '#f0d9b5', d: '#b58863', a: '#c55' },
+        purple:  { l: '#f0f0ff', d: '#8844aa', a: '#aa44cc' }
+    };
+
+    const PIECES = {
+        w: { k:'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg', q:'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg', r:'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg', b:'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg', n:'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg', p:'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
+        b: { k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg', q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg', r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg', b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg', n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg', p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg' }
+    };
+    
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    /* --- ИНИЦИАЛИЗАЦИЯ --- */
+    function initGame(keepSettings = false) {
+        // Сброс логики
+        gameOver = false;
+        turn = 'w';
+        selected = null;
+        lastMove = null;
+        history = [];
+        
+        // Сброс UI
+        document.getElementById('graveyard-w').innerHTML = '';
+        document.getElementById('graveyard-b').innerHTML = '';
+        undoBtn.disabled = true;
+        
+        createBoardArray();
+        generateCoords();
+        
+        // Сброс таймеров
+        if(timeConfig.active) {
+            times.w = timeConfig.start * 60;
+            times.b = timeConfig.start * 60;
+            updateTimerDisplay();
+            startTimer();
+        } else {
+            stopTimer();
+            document.getElementById('timeDisplayW').innerText = "--:--";
+            document.getElementById('timeDisplayB').innerText = "--:--";
+        }
+
+        drawBoard();
+        updateStatus();
+        applyVisualSettings();
+        
+        // Убедимся, что кнопка-переключатель видима, если панель скрыта
+        if (sidebarEl.classList.contains('hidden')) {
+            toggleSidebarBtn.style.right = '5px';
+            toggleSidebarBtn.innerHTML = '&#9776;';
+        }
+    }
+
+    function createBoardArray() {
+        const order = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
+        board = Array(8).fill(null).map(() => Array(8).fill(null));
+        for (let i = 0; i < 8; i++) {
+            board[0][i] = { type: order[i], color: 'b', moved: false };
+            board[1][i] = { type: 'p', color: 'b', moved: false };
+            board[6][i] = { type: 'p', color: 'w', moved: false };
+            board[7][i] = { type: order[i], color: 'w', moved: false };
+        }
+    }
+
+    /* --- ОТРИСОВКА --- */
+    function drawBoard() {
+        boardEl.innerHTML = '';
+        const inCheck = isCheck(turn, board);
+        
+        // Оптимизация: не пересоздавать сетку каждый раз, но для простоты кода оставим так
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const sq = document.createElement('div');
+                sq.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
+                sq.dataset.r = r; sq.dataset.c = c;
+                
+                // Подсветка последнего хода
+                if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) {
+                    sq.classList.add('last-move');
+                }
+
+                // Фигура
+                const p = board[r][c];
+                if (p) {
+                    const img = document.createElement('img');
+                    img.className = 'piece';
+                    img.src = PIECES[p.color][p.type];
+                    sq.appendChild(img);
+                    if (p.type === 'k' && p.color === turn && inCheck) sq.classList.add('in-check');
+                }
+
+                // Выделение и ходы
+                if (selected && selected.r === r && selected.c === c) sq.classList.add('selected');
+                
+                if (selected) {
+                    // Проверка хода (только если есть selected)
+                    if (canMove(selected.r, selected.c, r, c)) {
+                        sq.classList.add(p ? 'hint-ring' : 'hint-dot');
+                        sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
+                    } else {
+                        sq.onclick = () => selectSquare(r, c);
+                    }
+                } else {
+                    sq.onclick = () => selectSquare(r, c);
+                }
+
+                boardEl.appendChild(sq);
+            }
+        }
+        
+        if (!SETTINGS.hints) boardEl.classList.add('no-hints');
+        else boardEl.classList.remove('no-hints');
+    }
+
+    function generateCoords() {
+        coordsOverlay.innerHTML = '';
+        const files = ['a','b','c','d','e','f','g','h'];
+        for(let i=0; i<8; i++) {
+            // Буквы (Files) - bottom
+            let f = document.createElement('div');
+            f.className = 'coord coord-file';
+            f.innerText = files[i];
+            f.style.left = `calc(${i} * var(--sq-size))`;
+            coordsOverlay.appendChild(f);
+
+            // Цифры (Ranks) - left
+            let r = document.createElement('div');
+            r.className = 'coord coord-rank';
+            r.innerText = 8 - i;
+            r.style.top = `calc(${i} * var(--sq-size))`;
+            coordsOverlay.appendChild(r);
+        }
+    }
+
+    /* --- ЛОГИКА --- */
+    function selectSquare(r, c) {
+        if (gameOver) return;
+        const p = board[r][c];
+        if (p && p.color === turn) {
+            selected = { r, c };
+        } else {
+            selected = null;
+        }
+        drawBoard();
+    }
+
+    function makeMove(toR, toC) {
+        // 1. Сохраняем состояние для Undo
+        pushHistory();
+
+        const fromR = selected.r;
+        const fromC = selected.c;
+        const p = board[fromR][fromC];
+        const target = board[toR][toC];
+        
+        let moveSound = 'move';
+
+        // Взятие
+        if (target) {
+            moveSound = 'capture';
+            const img = document.createElement('img');
+            img.src = PIECES[target.color][target.type];
+            document.getElementById(target.color === 'w' ? 'graveyard-w' : 'graveyard-b').appendChild(img);
+        }
+
+        // Рокировка (двигаем ладью)
+        if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
+            const isKingSide = toC > fromC;
+            const rookC = isKingSide ? 7 : 0;
+            const newRookC = isKingSide ? 5 : 3;
+            const rook = board[toR][rookC];
+            board[toR][newRookC] = rook;
+            board[toR][rookC] = null;
+            rook.moved = true;
+            moveSound = 'move';
+        }
+
+        // Движение
+        board[toR][toC] = p;
+        board[fromR][fromC] = null;
+        p.moved = true;
+
+        // Превращение пешки (авто в ферзя для простоты)
+        if (p.type === 'p' && (toR === 0 || toR === 7)) {
+            p.type = 'q';
+            moveSound = 'check'; // Звук усиления
+        }
+
+        lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
+        
+        // Обработка таймера
+        if (timeConfig.active) {
+            times[turn] += timeConfig.inc; // Добавка
+            updateTimerDisplay(); // Обновить сразу
+        }
+
+        // Смена хода
+        turn = turn === 'w' ? 'b' : 'w';
+        selected = null;
+        
+        // Проверки состояния
+        if (isCheck(turn, board)) {
+            moveSound = 'check';
+            if (isMate(turn)) {
+                endGame(`Мат! Победа ${turn==='w'?'Черных':'Белых'}`);
+                moveSound = 'capture'; // Финальный аккорд
+            } else {
+                statusEl.innerText = "ШАХ!";
+            }
+        } else if (isStalemate(turn)) {
+            endGame("Пат. Ничья.");
+        } else {
+            updateStatus();
+        }
+
+        playSound(moveSound);
+        drawBoard();
+        applyVisualSettings(); // Обновление поворота и таймера
+    }
+
+    function undoMove() {
+        if (history.length === 0 || gameOver) return;
+        
+        const state = JSON.parse(history.pop());
+        board = state.board;
+        turn = state.turn;
+        lastMove = state.lastMove;
+        times = state.times;
+        gameOver = false;
+        
+        // Восстановление кладбища 
+        rebuildGraveyard();
+
+        if (history.length === 0) undoBtn.disabled = true;
+        
+        selected = null;
+        drawBoard();
+        updateStatus();
+        applyVisualSettings();
+    }
+
+    function pushHistory() {
+        history.push(JSON.stringify({
+            board: board, // массивы копируются по ссылке, но JSON делает глубокую копию структуры
+            turn: turn,
+            lastMove: lastMove,
+            times: {...times}
+        }));
+        if (history.length > 50) history.shift(); // Ограничим историю
+        undoBtn.disabled = false;
+    }
+
+    /* --- ПРАВИЛА --- */
+    function canMove(r1, c1, r2, c2) {
+        const p = board[r1][c1];
+        const t = board[r2][c2];
+        if (t && t.color === p.color) return false; // Свои
+
+        const dr = r2-r1, dc = c2-c1;
+        const absDr = Math.abs(dr), absDc = Math.abs(dc);
+        
+        let valid = false;
+        
+        if (p.type === 'p') {
+            const dir = p.color==='w' ? -1 : 1;
+            const start = p.color==='w' ? 6 : 1;
+            if (dc===0 && dr===dir && !t) valid=true;
+            if (dc===0 && dr===dir*2 && r1===start && !t && !board[r1+dir][c1]) valid=true;
+            if (Math.abs(dc)===1 && dr===dir && t) valid=true; // Взятие
+        } 
+        else if (p.type === 'n') {
+            if (absDr*absDc === 2) valid = true;
+        }
+        else if (p.type === 'k') {
+            if (Math.max(absDr, absDc) === 1) valid = true;
+            // Рокировка
+            if (dr===0 && absDc===2 && !p.moved && !isCheck(p.color, board)) {
+                const rookC = dc > 0 ? 7 : 0;
+                const rook = board[r1][rookC];
+                if (rook && rook.type==='r' && !rook.moved) {
+                    if (isPathClear(r1, c1, r1, rookC)) {
+                        // Проверка битых полей
+                        const step = dc > 0 ? 1 : -1;
+                        if (!isSquareAttacked(r1, c1+step, p.color) && !isSquareAttacked(r1, c1+step*2, p.color)) {
+                            valid = true;
+                        }
+                    }
+                }
+            }
+        }
+        else { // r, b, q
+            if (p.type==='r' && (dr*dc !== 0)) return false;
+            if (p.type==='b' && (absDr!==absDc)) return false;
+            if (p.type==='q' && (dr*dc!==0 && absDr!==absDc)) return false;
+            valid = isPathClear(r1, c1, r2, c2);
+        }
+
+        if (!valid) return false;
+
+        // Проверка на шах своему королю
+        const tempBoard = board.map(r => r.map(c => c ? {...c} : null));
+        tempBoard[r2][c2] = tempBoard[r1][c1];
+        tempBoard[r1][c1] = null;
+        if (isCheck(p.color, tempBoard)) return false;
+
+        return true;
+    }
+
+    function isPathClear(r1, c1, r2, c2) {
+        const stepR = Math.sign(r2-r1);
+        const stepC = Math.sign(c2-c1);
+        let r = r1+stepR, c = c1+stepC;
+        while(r!==r2 || c!==c2) {
+            if (board[r][c]) return false;
+            r+=stepR; c+=stepC;
+        }
+        return true;
+    }
+
+    function isCheck(color, b) {
+        let kR, kC;
+        // Найти короля
+        b.forEach((row, r) => row.forEach((p, c) => {
+            if (p && p.type === 'k' && p.color === color) { kR=r; kC=c; }
+        }));
+        return isSquareAttacked(kR, kC, color, b);
+    }
+
+    function isSquareAttacked(r, c, color, b=board) {
+        const enemy = color === 'w' ? 'b' : 'w';
+        // Упрощенная проверка атак (проходим по всем врагам)
+        // В реальном движке лучше проверять лучи ОТ короля, но здесь для краткости так:
+        for (let i=0; i<8; i++) {
+            for (let j=0; j<8; j++) {
+                const p = b[i][j];
+                if (p && p.color === enemy) {
+                    // Грязный хак: используем логику canMove, но без проверки на шах (infinite loop prevent)
+                    // Для пешек атака отличается от движения
+                    if (p.type === 'p') {
+                        const dir = p.color==='w' ? -1 : 1;
+                        if (Math.abs(j-c) === 1 && (r-i) === dir) return true;
+                    } 
+                    else if (p.type === 'k') {
+                        if (Math.abs(r-i)<=1 && Math.abs(c-j)<=1) return true;
+                    }
+                    else {
+                        // Для остальных фигур геометрия та же
+                        // Важно: здесь мы дублируем логику геометрии, чтобы не вызывать canMove рекурсивно
+                        const dr = r-i, dc = c-j;
+                        const absDr=Math.abs(dr), absDc=Math.abs(dc);
+                        let geo = false;
+                        if (p.type==='n') geo = absDr*absDc===2;
+                        else if (p.type==='r') geo = dr*dc===0 && isPathClear(i,j,r,c);
+                        else if (p.type==='b') geo = absDr===absDc && isPathClear(i,j,r,c);
+                        else if (p.type==='q') geo = (dr*dc===0 || absDr===absDc) && isPathClear(i,j,r,c);
+                        
+                        if(geo) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function isMate(color) {
+        for(let r=0; r<8; r++) {
+            for(let c=0; c<8; c++) {
+                if(board[r][c] && board[r][c].color === color) {
+                    for(let tr=0; tr<8; tr++) {
+                        for(let tc=0; tc<8; tc++) {
+                            if(canMove(r,c,tr,tc)) return false;
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+    
+    function isStalemate(color) { return !isCheck(color, board) && isMate(color); }
+
+    /* --- СИСТЕМНЫЕ ФУНКЦИИ --- */
+    
+    // ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ БОКОВОЙ ПАНЕЛИ
+    function toggleSidebar() {
+        sidebarEl.classList.toggle('hidden');
+        
+        // Обновляем кнопку на доске
+        if (sidebarEl.classList.contains('hidden')) {
+            toggleSidebarBtn.innerHTML = '&#9776;'; // Показать
+            toggleSidebarBtn.style.right = '5px';
+        } else {
+            toggleSidebarBtn.innerHTML = ''; 
+            toggleSidebarBtn.style.right = '-999px'; // Скрыть (переместить за экран)
+        }
+    }
+
+    function startTimer() {
+        if(timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if(gameOver) return;
+            times[turn]--;
+            updateTimerDisplay();
+            if(times[turn] <= 0) {
+                endGame(`Время вышло! Победа ${turn==='w'?'Черных':'Белых'}`);
+                playSound('check');
+            }
+        }, 1000);
+    }
+    
+    function stopTimer() {
+        if(timerInterval) clearInterval(timerInterval);
+    }
+
+    function updateTimerDisplay() {
+        const fmt = (t) => {
+            const m = Math.floor(t/60).toString().padStart(2,'0');
+            const s = (t%60).toString().padStart(2,'0');
+            return `${m}:${s}`;
+        };
+        document.getElementById('timeDisplayW').innerText = fmt(times.w);
+        document.getElementById('timeDisplayB').innerText = fmt(times.b);
+    }
+
+    function endGame(msg) {
+        gameOver = true;
+        stopTimer();
+        statusEl.innerText = msg;
+        statusEl.style.background = "rgba(255, 50, 50, 0.3)";
+    }
+
+    function updateStatus() {
+        if(!gameOver) {
+            statusEl.innerText = turn === 'w' ? "Ход Белых" : "Ход Черных";
+            statusEl.style.background = "rgba(255,255,255,0.05)";
+        }
+    }
+
+    function rebuildGraveyard() {
+        document.getElementById('graveyard-w').innerHTML = '';
+        document.getElementById('graveyard-b').innerHTML = '';
+        // В идеале нужно сравнивать текущую доску с начальной, но это сложно.
+        // Оставим пустым при отмене, т.к. функционал "Графики" второстепенен.
+    }
+
+    /* --- ЗВУК --- */
+    function playSound(type) {
+        if (!SETTINGS.sound || audioCtx.state === 'suspended') {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            if(!SETTINGS.sound) return;
+        }
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'move') {
+            osc.frequency.setValueAtTime(180, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 0.15);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
+        } else if (type === 'capture') {
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'check') {
+            osc.frequency.setValueAtTime(400, now);
+            osc.type = 'square';
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.4);
+            osc.start(now); osc.stop(now + 0.4);
+        }
+    }
+
+    /* --- НАСТРОЙКИ --- */
+    function openSettings() { document.getElementById('settingsModal').classList.add('open'); }
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+    
+    function toggleTimerSettings() {
+        const on = document.getElementById('timerToggle').checked;
+        document.getElementById('timerOptions').style.opacity = on ? 1 : 0.4;
+        document.getElementById('timerOptions').style.pointerEvents = on ? 'auto' : 'none';
+    }
+
+    function updateSettings() {
+        // Чтение значений
+        SETTINGS.theme = document.getElementById('themeSelect').value;
+        SETTINGS.hints = document.getElementById('hintsToggle').checked;
+        SETTINGS.coords = document.getElementById('coordsToggle').checked;
+        SETTINGS.sound = document.getElementById('soundToggle').checked;
+        SETTINGS.autoRotate = document.getElementById('rotateToggle').checked;
+        SETTINGS.highlightOpacity = document.getElementById('highlightRange').value / 100;
+
+        // Применение CSS переменных
+        const t = THEMES[SETTINGS.theme];
+        const r = document.documentElement.style;
+        r.setProperty('--board-light', t.l);
+        r.setProperty('--board-dark', t.d);
+        r.setProperty('--accent', t.a);
+        r.setProperty('--highlight-opacity', SETTINGS.highlightOpacity);
+        
+        // Координаты
+        if(SETTINGS.coords) coordsOverlay.classList.add('visible');
+        else coordsOverlay.classList.remove('visible');
+
+        drawBoard();
+        applyVisualSettings();
+    }
+
+    function applyVisualSettings() {
+        // Поворот доски
+        const rot = SETTINGS.autoRotate && turn === 'b' && !gameOver;
+        if(rot) boardContainer.classList.add('rotated');
+        else boardContainer.classList.remove('rotated');
+        
+        // Активность таймеров
+        document.getElementById('timerW').classList.toggle('active', turn === 'w' && !gameOver);
+        document.getElementById('timerB').classList.toggle('active', turn === 'b' && !gameOver);
+    }
+
+    function applyAndClose() {
+        // Сохраняем конфиг таймера
+        timeConfig.active = document.getElementById('timerToggle').checked;
+        timeConfig.start = parseInt(document.getElementById('timeInput').value) || 10;
+        timeConfig.inc = parseInt(document.getElementById('incrementInput').value) || 0;
+        
+        updateSettings();
+        closeSettings();
+        initGame(); // Перезапуск для применения времени
+    }
+
+    // Старт
+    initGame();
+</script>
+</body>
+</html>
