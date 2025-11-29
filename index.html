@@ -2,11 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <!-- Убрали experimental/нестабильный параметр interactive-widget -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#1e2a36">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="theme-color" content="#1e2a36"> <meta name="apple-mobile-web-app-capable" content="yes"> <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Chess Pro: Ultimate</title>
     <style>
         :root {
@@ -22,32 +19,36 @@
             --highlight-color: rgba(255, 255, 80, var(--highlight-opacity));
 
             /* --- РАЗМЕРЫ (Адаптивные) --- */
+            /* Используем dvh для мобильных, чтобы избежать проблем с адресной строкой */
             --vh: 100dvh; 
-            --board-size: min(92vw, 75vh, 650px);
+            --board-size: min(92vw, 75vh, 650px); /* Немного уменьшил max-height для безопасности */
             --sq-size: calc(var(--board-size) / 8);
         }
 
         /* Нормализация для всех браузеров */
         * { 
             box-sizing: border-box; 
-            -webkit-tap-highlight-color: transparent;
+            -webkit-tap-highlight-color: transparent; /* Убирает синюю вспышку при клике на Android/iOS */
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; /* Системный стек шрифтов */
             color: var(--text-color);
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: var(--vh);
+            min-height: 100vh;      /* Fallback для старых браузеров */
+            min-height: var(--vh);  /* Современный стандарт */
             margin: 0;
             padding: 0;
             user-select: none;
-            -webkit-user-select: none;
-            overflow: hidden;
+            -webkit-user-select: none; /* Safari */
+            overflow: hidden; /* Блокируем скролл страницы */
             background: linear-gradient(-45deg, #0f1014, #1e2a36, #181818, #0a0a0a);
             background-size: 400% 400%;
             animation: gradientBG 25s ease infinite;
+            
+            /* Улучшение рендеринга текста */
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
@@ -68,25 +69,9 @@
             padding: 10px;
             width: 100%;
             max-width: 1200px;
+            /* Предотвращаем скролл внутри контейнера */
             max-height: var(--vh);
             overflow: hidden;
-        }
-
-        /* --- fullscreen теперь применяется к .main-container --- */
-        .main-container:fullscreen,
-        .main-container:-webkit-full-screen,
-        .main-container:-moz-full-screen {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            background: #0a0a0a;
-        }
-        .main-container:fullscreen #board,
-        .main-container:-webkit-full-screen #board {
-            --board-size: min(95vw, 95vh);
         }
 
         /* --- ОБЕРТКА ДОСКИ --- */
@@ -97,10 +82,12 @@
             border-radius: 8px;
             box-shadow: 0 15px 40px rgba(0,0,0,0.6);
             transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            /* GPU ускорение для плавности */
             will-change: transform;
             transform: translateZ(0); 
         }
         
+        /* КНОПКА МЕНЮ (Гамбургер) */
         .sidebar-toggle-btn {
             position: absolute;
             top: 6px; right: 6px;
@@ -114,10 +101,13 @@
             line-height: 1;
             z-index: 20;
             transition: background 0.2s;
-            appearance: none; -webkit-appearance: none;
+            /* Сброс стилей iOS */
+            appearance: none; 
+            -webkit-appearance: none;
         }
         .sidebar-toggle-btn:hover { background: rgba(255, 255, 255, 0.2); }
 
+        /* Координаты */
         .coords-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -132,7 +122,7 @@
             font-weight: bold;
             opacity: 0.8;
             color: #aaa;
-            font-family: monospace;
+            font-family: monospace; /* Для лучшей читаемости */
         }
         .coord-file { bottom: 2px; text-align: center; width: var(--sq-size); }
         .coord-rank { left: 4px; display: flex; align-items: center; height: var(--sq-size); }
@@ -143,7 +133,8 @@
             grid-template-columns: repeat(8, var(--sq-size));
             grid-template-rows: repeat(8, var(--sq-size));
             border: 3px solid #333;
-            background: #333;
+            /* Исправление для некоторых старых версий Safari */
+            background: #333; 
         }
 
         .rotated { transform: rotate(180deg); }
@@ -157,6 +148,7 @@
             align-items: center;
             cursor: pointer;
             position: relative;
+            /* Оптимизация кликов */
             touch-action: manipulation; 
         }
 
@@ -170,12 +162,14 @@
         .piece {
             width: 90%; height: 90%;
             z-index: 5;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Пружинистый эффект */
             filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+            /* Предотвращает перетаскивание картинки браузером */
             -webkit-user-drag: none;
-            pointer-events: none;
+            pointer-events: none; /* Пропускаем клики сквозь картинку к клетке */
         }
 
+        /* Индикаторы хода */
         .hint-dot::after {
             content: ''; position: absolute;
             width: 22%; height: 22%;
@@ -199,6 +193,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            /* Кроссбраузерный blur */
             -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.05);
@@ -254,6 +249,7 @@
         }
         .graveyard img { width: 20px; opacity: 0.8; }
 
+        /* Кнопки */
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         
         .btn {
@@ -263,6 +259,7 @@
             transition: all 0.2s; 
             display: flex; align-items: center; justify-content: center; gap: 8px;
             font-size: 0.95rem;
+            /* Сброс нативных стилей */
             appearance: none; -webkit-appearance: none;
             touch-action: manipulation;
         }
@@ -288,6 +285,7 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.8);
             border: 1px solid #333;
             max-height: 85vh; overflow-y: auto;
+            /* Красивый скроллбар */
             scrollbar-width: thin; scrollbar-color: #555 #222;
         }
         .settings-panel::-webkit-scrollbar { width: 8px; }
@@ -301,6 +299,7 @@
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .setting-label { color: #ccc; font-size: 0.95rem; }
 
+        /* UI Элементы настроек */
         select, input[type="number"] {
             background: #2a2a2a; color: white; border: 1px solid #444;
             padding: 6px 10px; border-radius: 6px; font-size: 1rem;
@@ -308,6 +307,7 @@
         }
         select:focus, input:focus { border-color: var(--accent); }
 
+        /* Switch Toggle */
         .switch { position: relative; width: 50px; height: 26px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider {
@@ -322,15 +322,36 @@
         input:checked + .slider { background-color: var(--accent); }
         input:checked + .slider:before { transform: translateX(24px); }
 
+        /* --- ПОЛНОЭКРАННЫЙ РЕЖИМ --- */
+        /* Используем псевдоклассы для всех движков */
+        #boardContainer:fullscreen, 
+        #boardContainer:-webkit-full-screen, 
+        #boardContainer:-moz-full-screen {
+            width: 100%; height: 100%;
+            margin: 0; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: #0a0a0a;
+        }
+        
+        #boardContainer:fullscreen #board,
+        #boardContainer:-webkit-full-screen #board {
+            --board-size: min(95vw, 95vh); 
+        }
+
         /* --- MEDIA QUERIES (Адаптивность) --- */
         @media (min-width: 950px) {
             .main-container { flex-direction: row; align-items: flex-start; }
             .sidebar { margin-top: 25px; opacity: 1 !important; display: flex !important; transform: none !important; }
+            /* Скрываем кнопку меню на больших экранах, если хотим чтобы панель была всегда */
+            /* Но так как у нас есть кнопка "скрыть", оставим логику JS */
         }
         
+        /* Мобильные устройства */
         @media (max-width: 600px) {
             .board-container { padding: 10px; border-radius: 0; width: 100%; height: auto; box-shadow: none; background: transparent; }
             .timer-time { font-size: 1.5rem; }
+            
+            /* Полная ширина для сайдбара на мобилках */
             .sidebar {
                 position: fixed;
                 top: 0; left: 0; right: 0; bottom: 0;
@@ -340,9 +361,12 @@
                 background: rgba(20, 20, 20, 0.98);
                 padding: 30px 20px;
             }
+            
             .controls { grid-template-columns: 1fr; }
             .btn { padding: 16px; font-size: 1.1rem; }
             .btn-primary, .controls button { grid-column: span 1 !important; }
+            
+            /* Скрываем кнопку "Скрыть" на мобилках, заменяем на крестик */
         }
     </style>
 </head>
@@ -466,7 +490,6 @@
     const undoBtn = document.getElementById('undoBtn');
     const sidebarEl = document.getElementById('sidebar');
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
-    const mainContainer = document.querySelector('.main-container');
     
     let board = [];
     let turn = 'w';
@@ -501,6 +524,7 @@
         b: { k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg', q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg', r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg', b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg', n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg', p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg' }
     };
     
+    // Аудио контекст (кроссбраузерный)
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     function initGame() {
@@ -516,9 +540,6 @@
         
         createBoardArray();
         generateCoords();
-
-        // Устанавливаем отображение координат сразу по SETTINGS
-        coordsOverlay.classList.toggle('visible', SETTINGS.coords);
         
         if(timeConfig.active) {
             times.w = timeConfig.start * 60;
@@ -539,9 +560,11 @@
             toggleSidebarBtn.style.opacity = '1';
             toggleSidebarBtn.style.pointerEvents = 'auto';
         } else {
+             // На мобильных скрываем кнопку если панель открыта
             if(window.innerWidth <= 600) toggleSidebarBtn.style.opacity = '0';
         }
         
+        // Разблокировка аудио для iOS при первом клике
         document.body.addEventListener('click', () => {
             if(audioCtx.state === 'suspended') audioCtx.resume();
         }, {once:true});
@@ -586,6 +609,7 @@
                 if (selected) {
                     if (canMove(selected.r, selected.c, r, c)) {
                         sq.classList.add(p ? 'hint-ring' : 'hint-dot');
+                        // Используем onclick, так как touch-action: manipulation убирает задержку
                         sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
                     } else {
                         sq.onclick = () => selectSquare(r, c);
@@ -654,7 +678,7 @@
             const rook = board[toR][rookC];
             board[toR][newRookC] = rook;
             board[toR][rookC] = null;
-            if (rook) rook.moved = true;
+            rook.moved = true;
             moveSound = 'move';
         }
 
@@ -706,7 +730,7 @@
         times = state.times;
         gameOver = false;
         
-        rebuildGraveyard();
+        rebuildGraveyard(); // Очистка кладбища при отмене
         if (history.length === 0) undoBtn.disabled = true;
         
         selected = null;
@@ -726,10 +750,9 @@
         undoBtn.disabled = false;
     }
 
-    /* --- ПРАВИЛА --- */
+    /* --- ЛОГИКА ПРАВИЛ --- */
     function canMove(r1, c1, r2, c2) {
         const p = board[r1][c1];
-        if (!p) return false;
         const t = board[r2][c2];
         if (t && t.color === p.color) return false; 
 
@@ -851,6 +874,7 @@
             toggleSidebarBtn.style.opacity = '1';
             toggleSidebarBtn.style.pointerEvents = 'auto';
         } else {
+            // На мобильных скрываем гамбургер, если панель открыта (там свой крестик)
             if(window.innerWidth <= 600) {
                  toggleSidebarBtn.style.opacity = '0';
                  toggleSidebarBtn.style.pointerEvents = 'none';
@@ -859,13 +883,12 @@
     }
 
     function toggleFullscreen() {
-        // Первым делом пробуем сделать fullscreen на .main-container (чтобы меню оставалось внутри)
-        const target = mainContainer || document.documentElement;
+        const elem = document.getElementById('boardContainer');
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-            if (target.requestFullscreen) target.requestFullscreen().catch(()=>{});
-            else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+            if (elem.requestFullscreen) elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
         } else {
-            if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+            if (document.exitFullscreen) document.exitFullscreen();
             else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         }
     }
