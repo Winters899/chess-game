@@ -274,15 +274,81 @@
         }
         input:checked + .slider { background-color: var(--accent); }
         input:checked + .slider:before { transform: translateX(24px); }
+        
+        /* --- СТИЛЬ ДЛЯ ПОЛНОЭКРАННОГО РЕЖИМА --- */
+        /* Принудительно растягиваем контейнер на весь экран при активации */
+        #boardContainer:-webkit-full-screen {
+            width: 100%;
+            height: 100%;
+            margin: auto; /* Центрируем доску */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0a0a0a; /* Черный фон для полноэкранного режима */
+        }
+
+        #boardContainer:-ms-fullscreen {
+            width: 100%;
+            height: 100%;
+        }
+
+        #boardContainer:fullscreen {
+            width: 100%;
+            height: 100%;
+            margin: auto; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0a0a0a;
+        }
+
+        /* Убедимся, что сама доска максимально большая в полноэкранном режиме */
+        #boardContainer:fullscreen #board {
+            /* Устанавливаем максимальный размер доски внутри fullscreen контейнера */
+            --board-size: min(90vh, 90vw); 
+        }
 
         /* Media Queries */
         @media (min-width: 950px) {
             .main-container { flex-direction: row; align-items: flex-start; }
             .sidebar { margin-top: 25px; }
         }
+        
+        /* Адаптивность для узких экранов (смартфоны) */
         @media (max-width: 500px) {
-            .board-container { padding: 15px; }
+            /* Обертка доски */
+            .board-container { padding: 10px; }
+            /* Уменьшаем шрифт таймера */
             .timer-time { font-size: 1.4rem; }
+            
+            /* Боковая панель */
+            .sidebar {
+                /* Убедимся, что на очень маленьких экранах она занимает всю ширину */
+                max-width: 100%;
+                padding: 15px;
+            }
+            
+            /* Управление (Кнопки) */
+            .controls {
+                grid-template-columns: 1fr; /* Кнопки управления в один столбец */
+            }
+            /* Кнопки, которые раньше были на 2 столбца, теперь будут на 1 */
+            .btn-primary, .controls button:last-child {
+                grid-column: span 1 !important; 
+            }
+            
+            /* Кладбище (уменьшаем фигуры) */
+            .graveyard img { 
+                width: 16px; 
+            }
+            .graveyard {
+                min-height: 24px;
+            }
+            
+            /* Уменьшаем размер основного шрифта на очень маленьких экранах */
+            .status-bar, .timer-label {
+                font-size: 0.8rem;
+            }
         }
     </style>
 </head>
@@ -317,6 +383,9 @@
             <button class="btn btn-primary" onclick="initGame()">Новая игра</button>
             <button class="btn" id="undoBtn" onclick="undoMove()" disabled>↩ Назад</button>
             <button class="btn" onclick="openSettings()">⚙ Настройки</button>
+            
+            <button class="btn" onclick="toggleFullscreen()">📺 Во весь экран</button>
+
             <button class="btn" onclick="toggleSidebar()" style="grid-column: span 2;">&#10006; Скрыть панель</button> 
         </div>
     </div>
@@ -824,6 +893,32 @@
             toggleSidebarBtn.style.right = '-999px'; // Скрыть (переместить за экран)
         }
     }
+
+    // ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ПОЛНОЭКРАННОГО РЕЖИМА
+    function toggleFullscreen() {
+        const elem = document.getElementById('boardContainer');
+        
+        if (!document.fullscreenElement) {
+            // Запрашиваем полноэкранный режим
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
+            }
+        } else {
+            // Выходим из полноэкранного режима
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            }
+        }
+    }
+
 
     function startTimer() {
         if(timerInterval) clearInterval(timerInterval);
