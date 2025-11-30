@@ -95,13 +95,36 @@
         }
         .coords-overlay.visible { display: block; }
         
-        .coord {
-            position: absolute; font-size: 13px; font-weight: bold;
-            color: var(--text-color); text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-        }
-        .coord-file { bottom: 2px; right: 4px; }
-        .coord-rank { top: 2px; left: 4px; }
-
+        /* ИСПРАВЛЕНИЕ ПОЗИЦИОНИРОВАНИЯ КООРДИНАТ */
+.coord {
+    position: absolute;
+    font-size: 14px;
+    font-weight: bold;
+    opacity: 0.8;
+    color: #aaa;
+    /* Убедимся, что они всегда поверх доски, но под кнопкой */
+    z-index: 5; 
+}
+/* Буквы (снизу) */
+.coord-file { 
+    bottom: 5px; /* Отодвигаем от низа контейнера */
+    text-align: center; 
+    width: var(--sq-size); 
+    height: 20px;
+    /* Сдвигаем влево на размер паддинга, чтобы буквы были под доской, а не под паддингом */
+    left: 25px; 
+}
+/* Цифры (слева) */
+.coord-rank { 
+    left: 5px; /* Отодвигаем от левого края контейнера */
+    display: flex; 
+    align-items: center; 
+    height: var(--sq-size); 
+    width: 20px;
+    /* Сдвигаем вниз на размер паддинга, чтобы цифры были слева от доски */
+    top: 25px; 
+}
+/* КОНЕЦ ИСПРАВЛЕНИЯ */
         #board {
             display: grid;
             grid-template-columns: repeat(8, var(--sq-size));
