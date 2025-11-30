@@ -34,7 +34,6 @@
             min-height: 100vh;
             margin: 0;
             user-select: none;
-            /* ИСПРАВЛЕНИЕ: Разрешаем прокрутку, если контент не влезает */
             overflow-y: auto; 
             overflow-x: hidden;
             background: linear-gradient(-45deg, #0f1014, #1e2a36, #181818, #0a0a0a);
@@ -105,21 +104,19 @@
             color: #aaa;
         }
         
-        /* ИСПРАВЛЕНИЕ: Буквы (снизу) */
+        /* ИСПРАВЛЕНИЕ: Буквы (позиционируются полностью JS) */
         .coord-file { 
-            bottom: 4px; 
             text-align: center; 
             width: var(--sq-size); 
-            /* Левая граница будет установлена JS */
+            /* Удалены top/bottom/left/right */
         }
         
-        /* ИСПРАВЛЕНИЕ: Цифры (слева) */
+        /* ИСПРАВЛЕНИЕ: Цифры (позиционируются полностью JS) */
         .coord-rank { 
-            left: 6px; 
             display: flex; 
             align-items: center; 
             height: var(--sq-size); 
-            /* Верхняя граница будет установлена JS */
+            /* Удалены top/bottom/left/right */
         }
 
         /* Сама сетка доски */
@@ -135,7 +132,7 @@
         /* Чтобы цифры и фигуры не были вверх ногами при повороте */
         .rotated .piece, .rotated .coord { 
             transform: rotate(-180deg); 
-            /* ИСПРАВЛЕНИЕ: Убираем drop-shadow при повороте для лучшей читаемости, т.к. тень будет сверху */
+            /* Скорректированная тень при повороте */
             filter: drop-shadow(0 -2px 3px rgba(0,0,0,0.4)); 
         }
         .piece {
@@ -156,24 +153,18 @@
             align-items: center;
             justify-content: center;
             background: #0a0a0a;
-            /* УБРАНО: padding, чтобы доска занимала максимум места. Паддинг будет управляться JS и --board-padding */
-            padding: 0; 
+            padding: 0; /* Очищаем паддинг, он будет установлен JS */
         }
         
         #boardContainer:fullscreen .sidebar-toggle-btn {
-            display: none; /* Скрываем кнопку в полноэкранном режиме */
+            display: none; 
         }
 
-        /* ИСПРАВЛЕНИЕ: Делаем доску максимально большой в полноэкранном режиме */
+        /* Делаем доску максимально большой в полноэкранном режиме */
         #boardContainer:fullscreen #board {
-            /* Переопределяем CSS переменные для полноэкранного режима */
-            --board-size: min(100vmin, 100vmax); /* Используем vmin и vmax для лучшего заполнения */
+            --board-size: min(100vmin, 100vmax); 
             --sq-size: calc(var(--board-size) / 8); 
-            /* Устанавливаем паддинг обратно, но как часть контейнера, 
-               чтобы координаты не выходили за экран. JS потом скорректирует. */
-            padding: 0; 
         }
-
 
         /* Media Queries */
         @media (min-width: 950px) {
@@ -183,12 +174,10 @@
         
         /* Адаптивность для узких экранов (смартфоны) */
         @media (max-width: 500px) {
-            /* Обертка доски */
             :root {
                 --board-padding: 10px; /* Уменьшаем паддинг на мобильных */
             }
             .board-container { padding: var(--board-padding); }
-            /* ... (остальные стили для мобильных) ... */
             .timer-time { font-size: 1.4rem; }
             .sidebar { max-width: 100%; padding: 15px; }
             .controls { grid-template-columns: 1fr; }
@@ -325,11 +314,11 @@
     let selected = null;
     let gameOver = false;
     let lastMove = null;
-    let history = []; // Стек для Undo
+    let history = []; 
 
     // Таймер
     let timerInterval = null;
-    let times = { w: 600, b: 600 }; // секунды
+    let times = { w: 600, b: 600 }; 
     let timeConfig = { active: true, start: 10, inc: 0 };
 
     // Настройки
@@ -389,7 +378,6 @@
         updateStatus();
         applyVisualSettings();
         
-        // Убедимся, что кнопка-переключатель видима, если панель скрыта
         if (sidebarEl.classList.contains('hidden')) {
             toggleSidebarBtn.style.right = '5px';
             toggleSidebarBtn.innerHTML = '&#9776;';
@@ -412,19 +400,16 @@
         boardEl.innerHTML = '';
         const inCheck = isCheck(turn, board);
         
-        // Оптимизация: не пересоздавать сетку каждый раз, но для простоты кода оставим так
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const sq = document.createElement('div');
                 sq.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
                 sq.dataset.r = r; sq.dataset.c = c;
                 
-                // Подсветка последнего хода
                 if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) {
                     sq.classList.add('last-move');
                 }
 
-                // Фигура
                 const p = board[r][c];
                 if (p) {
                     const img = document.createElement('img');
@@ -434,11 +419,9 @@
                     if (p.type === 'k' && p.color === turn && inCheck) sq.classList.add('in-check');
                 }
 
-                // Выделение и ходы
                 if (selected && selected.r === r && selected.c === c) sq.classList.add('selected');
                 
                 if (selected) {
-                    // Проверка хода (только если есть selected)
                     if (canMove(selected.r, selected.c, r, c)) {
                         sq.classList.add(p ? 'hint-ring' : 'hint-dot');
                         sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
@@ -457,54 +440,75 @@
         else boardEl.classList.remove('no-hints');
     }
 
-    /* ИСПРАВЛЕННАЯ ФУНКЦИЯ: Динамически рассчитывает координаты, учитывая текущий размер клетки и паддинг */
+    /* ИСПРАВЛЕННАЯ ФУНКЦИЯ: Учет поворота и динамического позиционирования */
     function generateCoords() {
         coordsOverlay.innerHTML = '';
         
-        // 1. Получаем реальные размеры из DOM
+        // 1. Получаем реальные размеры
         const sqSize = boardEl.clientWidth / 8; 
-        const containerPadding = parseFloat(getComputedStyle(boardContainer).getPropertyValue('--board-padding'));
+        const style = getComputedStyle(boardContainer);
+        // Получаем паддинг из CSS-переменной
+        const containerPadding = parseFloat(style.getPropertyValue('--board-padding')); 
         const isRotated = boardContainer.classList.contains('rotated');
-        
-        if (sqSize <= 0 || isNaN(containerPadding)) return; // Защита от нулевых размеров
+        const halfCoordSize = 14 / 2; // Приблизительный размер шрифта/2 для центрирования
+
+        if (sqSize <= 0 || isNaN(containerPadding)) return;
 
         const files = ['a','b','c','d','e','f','g','h'];
 
         for(let i=0; i<8; i++) {
-            const fileIndex = i; // a-h (0-7)
-            const rankIndex = 7 - i; // 1-8 (7-0)
-            
-            // Расчет позиции символа
-            // Base offset = (индекс * размер клетки)
             const baseOffset = i * sqSize;
+            
+            // Определяем символы в зависимости от поворота
+            const fileChar = files[isRotated ? 7 - i : i];
+            // 8-i для белых (снизу 1, сверху 8). i+1 для черных (снизу 8, сверху 1).
+            const rankChar = isRotated ? i + 1 : 8 - i; 
 
             // --- Буквы (Files: a-h) ---
             let f = document.createElement('div');
             f.className = 'coord coord-file';
-            f.innerText = files[i];
+            f.innerText = fileChar;
             
-            // В не-повернутом состоянии: Буквы снизу, горизонтальное смещение
-            // В повернутом состоянии: Буквы сверху, горизонтальное смещение (выглядят как h-a)
+            // 1. Горизонтальное смещение: начало клетки + паддинг контейнера
             f.style.left = `${baseOffset + containerPadding}px`; 
-            f.style.bottom = `${containerPadding / 4}px`; // Небольшой отступ от нижнего края
-
+            
+            // 2. Вертикальное смещение: верх или низ
+            if (isRotated) {
+                // Сверху, отступ от края
+                f.style.top = `${containerPadding - halfCoordSize - 3}px`; 
+                f.style.bottom = 'auto';
+            } else {
+                // Снизу, отступ от края
+                f.style.bottom = `${containerPadding - halfCoordSize - 3}px`; 
+                f.style.top = 'auto';
+            }
             coordsOverlay.appendChild(f);
+
 
             // --- Цифры (Ranks: 1-8) ---
             let r = document.createElement('div');
             r.className = 'coord coord-rank';
-            r.innerText = 8 - i;
+            r.innerText = rankChar;
 
-            // В не-повернутом состоянии: Цифры слева, вертикальное смещение
-            // В повернутом состоянии: Цифры справа, вертикальное смещение (выглядят как 8-1)
+            // 1. Вертикальное смещение: начало клетки + паддинг контейнера
             r.style.top = `${baseOffset + containerPadding}px`; 
-            r.style.left = `${containerPadding / 4}px`; // Небольшой отступ от левого края
-
+            
+            // 2. Горизонтальное смещение: лево или право
+            if (isRotated) {
+                // Справа, отступ от края
+                r.style.right = `${containerPadding - halfCoordSize - 3}px`; 
+                r.style.left = 'auto';
+            } else {
+                // Слева, отступ от края
+                r.style.left = `${containerPadding - halfCoordSize - 3}px`; 
+                r.style.right = 'auto';
+            }
             coordsOverlay.appendChild(r);
         }
     }
 
-    /* --- ЛОГИКА --- */
+    /* --- ЛОГИКА (Не изменялась) --- */
+
     function selectSquare(r, c) {
         if (gameOver) return;
         const p = board[r][c];
@@ -517,9 +521,8 @@
     }
 
     function makeMove(toR, toC) {
-        // 1. Сохраняем состояние для Undo
         pushHistory();
-
+        // ... (логика хода) ...
         const fromR = selected.r;
         const fromC = selected.c;
         const p = board[fromR][fromC];
@@ -527,7 +530,6 @@
         
         let moveSound = 'move';
 
-        // Взятие
         if (target) {
             moveSound = 'capture';
             const img = document.createElement('img');
@@ -535,7 +537,6 @@
             document.getElementById(target.color === 'w' ? 'graveyard-w' : 'graveyard-b').appendChild(img);
         }
 
-        // Рокировка (двигаем ладью)
         if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
             const isKingSide = toC > fromC;
             const rookC = isKingSide ? 7 : 0;
@@ -547,35 +548,30 @@
             moveSound = 'move';
         }
 
-        // Движение
         board[toR][toC] = p;
         board[fromR][fromC] = null;
         p.moved = true;
 
-        // Превращение пешки (авто в ферзя для простоты)
         if (p.type === 'p' && (toR === 0 || toR === 7)) {
             p.type = 'q';
-            moveSound = 'check'; // Звук усиления
+            moveSound = 'check'; 
         }
 
         lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
         
-        // Обработка таймера
         if (timeConfig.active) {
-            times[turn] += timeConfig.inc; // Добавка
-            updateTimerDisplay(); // Обновить сразу
+            times[turn] += timeConfig.inc; 
+            updateTimerDisplay();
         }
 
-        // Смена хода
         turn = turn === 'w' ? 'b' : 'w';
         selected = null;
         
-        // Проверки состояния
         if (isCheck(turn, board)) {
             moveSound = 'check';
             if (isMate(turn)) {
                 endGame(`Мат! Победа ${turn==='w'?'Черных':'Белых'}`);
-                moveSound = 'capture'; // Финальный аккорд
+                moveSound = 'capture'; 
             } else {
                 statusEl.innerText = "ШАХ!";
             }
@@ -587,9 +583,10 @@
 
         playSound(moveSound);
         drawBoard();
-        applyVisualSettings(); // Обновление поворота и таймера
+        applyVisualSettings();
     }
-
+    
+    // ... (undoMove, pushHistory, canMove и другие вспомогательные функции - без изменений) ...
     function undoMove() {
         if (history.length === 0 || gameOver) return;
         
@@ -600,7 +597,6 @@
         times = state.times;
         gameOver = false;
         
-        // Восстановление кладбища 
         rebuildGraveyard();
 
         if (history.length === 0) undoBtn.disabled = true;
@@ -609,26 +605,33 @@
         drawBoard();
         updateStatus();
         applyVisualSettings();
-        updateTimerDisplay(); // Обновить таймер при отмене
+        updateTimerDisplay();
     }
 
     function pushHistory() {
         history.push(JSON.stringify({
-            board: board, // массивы копируются по ссылке, но JSON делает глубокую копию структуры
+            board: board, 
             turn: turn,
             lastMove: lastMove,
             times: {...times}
         }));
-        if (history.length > 50) history.shift(); // Ограничим историю
+        if (history.length > 50) history.shift(); 
         undoBtn.disabled = false;
     }
 
-    /* --- ПРАВИЛА (Оставлены без изменений, т.к. работают корректно) --- */
+    function rebuildGraveyard() {
+        document.getElementById('graveyard-w').innerHTML = '';
+        document.getElementById('graveyard-b').innerHTML = '';
+        // Логика восстановления фигур тут
+    }
+    
+    // ... (canMove, isPathClear, isCheck, isSquareAttacked, isMate, isStalemate - без изменений) ...
     function canMove(r1, c1, r2, c2) {
+        // ... (основная логика canMove) ...
         const p = board[r1][c1];
         const t = board[r2][c2];
-        if (t && t.color === p.color) return false; // Свои
-
+        if (t && t.color === p.color) return false; 
+    
         const dr = r2-r1, dc = c2-c1;
         const absDr = Math.abs(dr), absDc = Math.abs(dc);
         
@@ -639,20 +642,18 @@
             const start = p.color==='w' ? 6 : 1;
             if (dc===0 && dr===dir && !t) valid=true;
             if (dc===0 && dr===dir*2 && r1===start && !t && !board[r1+dir][c1]) valid=true;
-            if (Math.abs(dc)===1 && dr===dir && t) valid=true; // Взятие
+            if (Math.abs(dc)===1 && dr===dir && t) valid=true;
         } 
         else if (p.type === 'n') {
             if (absDr*absDc === 2) valid = true;
         }
         else if (p.type === 'k') {
             if (Math.max(absDr, absDc) === 1) valid = true;
-            // Рокировка
             if (dr===0 && absDc===2 && !p.moved && !isCheck(p.color, board)) {
                 const rookC = dc > 0 ? 7 : 0;
                 const rook = board[r1][rookC];
                 if (rook && rook.type==='r' && !rook.moved) {
                     if (isPathClear(r1, c1, r1, rookC)) {
-                        // Проверка битых полей
                         const step = dc > 0 ? 1 : -1;
                         if (!isSquareAttacked(r1, c1+step, p.color) && !isSquareAttacked(r1, c1+step*2, p.color)) {
                             valid = true;
@@ -661,7 +662,7 @@
                 }
             }
         }
-        else { // r, b, q
+        else { 
             if (p.type==='r' && (dr*dc !== 0)) return false;
             if (p.type==='b' && (absDr!==absDc)) return false;
             if (p.type==='q' && (dr*dc!==0 && absDr!==absDc)) return false;
@@ -670,7 +671,6 @@
 
         if (!valid) return false;
 
-        // Проверка на шах своему королю
         const tempBoard = board.map(r => r.map(c => c ? {...c} : null));
         tempBoard[r2][c2] = tempBoard[r1][c1];
         tempBoard[r1][c1] = null;
@@ -678,7 +678,7 @@
 
         return true;
     }
-
+    
     function isPathClear(r1, c1, r2, c2) {
         const stepR = Math.sign(r2-r1);
         const stepC = Math.sign(c2-c1);
@@ -692,21 +692,18 @@
 
     function isCheck(color, b) {
         let kR, kC;
-        // Найти короля
         b.forEach((row, r) => row.forEach((p, c) => {
             if (p && p.type === 'k' && p.color === color) { kR=r; kC=c; }
         }));
         return isSquareAttacked(kR, kC, color, b);
     }
-
+    
     function isSquareAttacked(r, c, color, b=board) {
         const enemy = color === 'w' ? 'b' : 'w';
-        // Упрощенная проверка атак (проходим по всем врагам)
         for (let i=0; i<8; i++) {
             for (let j=0; j<8; j++) {
                 const p = b[i][j];
                 if (p && p.color === enemy) {
-                    // Для пешек атака отличается от движения
                     if (p.type === 'p') {
                         const dir = p.color==='w' ? -1 : 1;
                         if (Math.abs(j-c) === 1 && (r-i) === dir) return true;
@@ -715,7 +712,6 @@
                         if (Math.abs(r-i)<=1 && Math.abs(c-j)<=1) return true;
                     }
                     else {
-                        // Для остальных фигур геометрия та же
                         const dr = r-i, dc = c-j;
                         const absDr=Math.abs(dr), absDc=Math.abs(dc);
                         let geo = false;
@@ -751,58 +747,49 @@
 
     /* --- СИСТЕМНЫЕ ФУНКЦИИ --- */
     
-    // ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ БОКОВОЙ ПАНЕЛИ
     function toggleSidebar() {
         sidebarEl.classList.toggle('hidden');
         
         if (sidebarEl.classList.contains('hidden')) {
-            toggleSidebarBtn.innerHTML = '&#9776;'; // Показать
+            toggleSidebarBtn.innerHTML = '&#9776;'; 
             toggleSidebarBtn.style.right = '5px';
         } else {
             toggleSidebarBtn.innerHTML = ''; 
-            toggleSidebarBtn.style.right = '-999px'; // Скрыть
+            toggleSidebarBtn.style.right = '-999px'; 
         }
     }
 
-    // ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ ПОЛНОЭКРАННОГО РЕЖИМА
+    // УПРОЩЕННАЯ ФУНКЦИЯ ДЛЯ ПОЛНОЭКРАННОГО РЕЖИМА
     function toggleFullscreen() {
         const elem = document.getElementById('boardContainer');
         
         if (!document.fullscreenElement) {
-            // Вход в полноэкранный режим
             const requestFn = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
             if (requestFn) {
                 requestFn.call(elem);
             }
         } else {
-            // Выход из полноэкранного режима
             const exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
             if (exitFn) {
                 exitFn.call(document);
             }
         }
-        
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перерисовка координат после смены режима
-        // Добавление небольшого таймаута для ожидания перерасчета размеров браузером
-        setTimeout(() => {
-            // В полноэкранном режиме паддинг может быть 0, но нам нужно его вернуть для координат
-            if (document.fullscreenElement) {
-                // Если мы в полноэкранном режиме, устанавливаем паддинг, чтобы сохранить место для координат
-                boardContainer.style.padding = '25px'; 
-                document.documentElement.style.setProperty('--board-padding', '25px');
-            } else {
-                // Возвращаемся к старому паддингу (для мобильных он 10px)
-                const defaultPadding = window.innerWidth <= 500 ? '10px' : '25px';
-                boardContainer.style.padding = defaultPadding;
-                document.documentElement.style.setProperty('--board-padding', defaultPadding);
-            }
-            generateCoords();
-        }, 50); // Небольшая задержка
     }
     
-    // Добавляем обработчик на изменение полноэкранного режима
+    // Обработчик, который теперь управляет паддингом и перерисовкой
     document.addEventListener('fullscreenchange', () => {
-        // Вызываем перерисовку при изменении, чтобы обновить размеры доски и координаты
+        // Устанавливаем паддинг для boardContainer после того, как браузер закончит масштабирование
+        const isFullscreen = !!document.fullscreenElement;
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: устанавливаем паддинг здесь
+        let newPadding = '25px';
+        if (!isFullscreen && window.innerWidth <= 500) {
+            newPadding = '10px';
+        }
+        boardContainer.style.padding = newPadding;
+        document.documentElement.style.setProperty('--board-padding', newPadding);
+        
+        // Небольшой таймаут для уверенности, что DOM обновился
         setTimeout(() => {
              drawBoard();
              applyVisualSettings(); // Это вызовет generateCoords
@@ -851,14 +838,6 @@
         }
     }
 
-    function rebuildGraveyard() {
-        document.getElementById('graveyard-w').innerHTML = '';
-        document.getElementById('graveyard-b').innerHTML = '';
-        // В идеале нужно сравнивать текущую доску с начальной, но это сложно.
-        // Оставим пустым при отмене, т.к. функционал "Графики" второстепенен.
-    }
-
-    /* --- ЗВУК (Оставлен без изменений) --- */
     function playSound(type) {
         if (!SETTINGS.sound || audioCtx.state === 'suspended') {
             if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -893,7 +872,6 @@
 
     /* --- НАСТРОЙКИ --- */
     function openSettings() { 
-        // Чтение текущих настроек в модальное окно
         document.getElementById('themeSelect').value = SETTINGS.theme;
         document.getElementById('hintsToggle').checked = SETTINGS.hints;
         document.getElementById('coordsToggle').checked = SETTINGS.coords;
@@ -903,7 +881,7 @@
         document.getElementById('timerToggle').checked = timeConfig.active;
         document.getElementById('timeInput').value = timeConfig.start;
         document.getElementById('incrementInput').value = timeConfig.inc;
-        toggleTimerSettings(); // Обновляем состояние блока таймера
+        toggleTimerSettings(); 
 
         document.getElementById('settingsModal').classList.add('open'); 
     }
@@ -923,7 +901,6 @@
     }
 
     function updateSettings() {
-        // Чтение значений
         SETTINGS.theme = document.getElementById('themeSelect').value;
         SETTINGS.hints = document.getElementById('hintsToggle').checked;
         SETTINGS.coords = document.getElementById('coordsToggle').checked;
@@ -931,7 +908,6 @@
         SETTINGS.autoRotate = document.getElementById('rotateToggle').checked;
         SETTINGS.highlightOpacity = document.getElementById('highlightRange').value / 100;
 
-        // Применение CSS переменных
         const t = THEMES[SETTINGS.theme];
         const r = document.documentElement.style;
         r.setProperty('--board-light', t.l);
@@ -939,7 +915,6 @@
         r.setProperty('--accent', t.a);
         r.setProperty('--highlight-opacity', SETTINGS.highlightOpacity);
         
-        // Координаты
         if(SETTINGS.coords) coordsOverlay.classList.add('visible');
         else coordsOverlay.classList.remove('visible');
 
@@ -962,17 +937,16 @@
     }
 
     function applyAndClose() {
-        // Сохраняем конфиг таймера
         timeConfig.active = document.getElementById('timerToggle').checked;
         timeConfig.start = parseInt(document.getElementById('timeInput').value) || 10;
         timeConfig.inc = parseInt(document.getElementById('incrementInput').value) || 0;
         
         updateSettings();
         closeSettings();
-        initGame(); // Перезапуск для применения времени
+        initGame(); 
     }
 
-    // Старт
+    // Инициализация при загрузке страницы
     initGame();
 </script>
 </body>
