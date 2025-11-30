@@ -432,17 +432,30 @@
         boardEl.className = SETTINGS.hints ? '' : 'no-hints';
     }
 
+    
     function generateCoords() {
-        coordsOverlay.innerHTML = ''; const files = ['a','b','c','d','e','f','g','h'];
-        for(let i=0; i<8; i++) {
-            let f = document.createElement('div'); f.className = 'coord coord-file'; f.innerText = files[i];
-            f.style.left = `calc(${i} * var(--sq-size))`; f.style.width = 'var(--sq-size)'; f.style.top = `calc(7 * var(--sq-size))`;
-            coordsOverlay.appendChild(f);
-            let r = document.createElement('div'); r.className = 'coord coord-rank'; r.innerText = 8 - i;
-            r.style.top = `calc(${i} * var(--sq-size))`; r.style.height = 'var(--sq-size)';
-            coordsOverlay.appendChild(r);
-        }
+    coordsOverlay.innerHTML = '';
+    const files = ['a','b','c','d','e','f','g','h'];
+    const sqSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sq-size'));
+
+    for(let i=0; i<8; i++) {
+        // Буквы (Files) - bottom
+        let f = document.createElement('div');
+        f.className = 'coord coord-file';
+        f.innerText = files[i];
+        // Позиционируем по горизонтали
+        f.style.left = `calc(${i} * var(--sq-size) + 25px)`; // +25px - это padding-left
+        coordsOverlay.appendChild(f);
+
+        // Цифры (Ranks) - left
+        let r = document.createElement('div');
+        r.className = 'coord coord-rank';
+        r.innerText = 8 - i;
+        // Позиционируем по вертикали
+        r.style.top = `calc(${i} * var(--sq-size) + 25px)`; // +25px - это padding-top
+        coordsOverlay.appendChild(r);
     }
+}
 
     function selectSquare(r, c) {
         if (gameOver) return;
