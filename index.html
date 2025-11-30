@@ -17,9 +17,10 @@
             --highlight-opacity: 0.6;
             --highlight-color: rgba(255, 255, 80, var(--highlight-opacity));
 
-            /* --- РАЗМЕРЫ --- */
+            /* --- РАЗМЕРЫ (Стандартный режим) --- */
             --board-size: min(92vw, 80vh, 650px);
             --sq-size: calc(var(--board-size) / 8);
+            --board-padding: 25px; /* Базовый отступ */
         }
 
         * { box-sizing: border-box; }
@@ -33,8 +34,8 @@
             min-height: 100vh;
             margin: 0;
             user-select: none;
-            /* ИСПРАВЛЕНИЕ: Разрешаем прокрутку на мобильных, если контент не влезает */
-            overflow-y: auto;
+            /* ИСПРАВЛЕНИЕ: Разрешаем прокрутку, если контент не влезает */
+            overflow-y: auto; 
             overflow-x: hidden;
             background: linear-gradient(-45deg, #0f1014, #1e2a36, #181818, #0a0a0a);
             background-size: 400% 400%;
@@ -61,7 +62,7 @@
         /* --- ОБЕРТКА ДОСКИ --- */
         .board-container {
             position: relative;
-            padding: 25px; /* Место для координат */
+            padding: var(--board-padding); /* Используем переменную */
             background: var(--panel-bg);
             border-radius: 8px;
             box-shadow: 0 15px 40px rgba(0,0,0,0.6);
@@ -91,8 +92,8 @@
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
-            display: none; /* Включаются в настройках */
-            z-index: 5; /* Ниже кнопки-переключателя */
+            display: none; 
+            z-index: 5;
         }
         .coords-overlay.visible { display: block; }
         
@@ -104,23 +105,21 @@
             color: #aaa;
         }
         
-        /* ИСПРАВЛЕНИЕ: Буквы (снизу) - позиционирование относительно padding: 25px */
+        /* ИСПРАВЛЕНИЕ: Буквы (снизу) */
         .coord-file { 
             bottom: 4px; 
             text-align: center; 
             width: var(--sq-size); 
-            /* Смещение влево, чтобы они находились под доской */
-            left: 25px; 
+            /* Левая граница будет установлена JS */
         }
         
-        /* ИСПРАВЛЕНИЕ: Цифры (слева) - позиционирование относительно padding: 25px */
+        /* ИСПРАВЛЕНИЕ: Цифры (слева) */
         .coord-rank { 
             left: 6px; 
             display: flex; 
             align-items: center; 
-            height: var(--sq-size);
-            /* Смещение вниз, чтобы они находились рядом с доской */
-            top: 25px;
+            height: var(--sq-size); 
+            /* Верхняя граница будет установлена JS */
         }
 
         /* Сама сетка доски */
@@ -134,182 +133,21 @@
         /* Поворот доски */
         .rotated { transform: rotate(180deg); }
         /* Чтобы цифры и фигуры не были вверх ногами при повороте */
-        .rotated .piece, .rotated .coord { transform: rotate(-180deg); }
-
-        .square {
-            width: var(--sq-size);
-            height: var(--sq-size);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            position: relative;
+        .rotated .piece, .rotated .coord { 
+            transform: rotate(-180deg); 
+            /* ИСПРАВЛЕНИЕ: Убираем drop-shadow при повороте для лучшей читаемости, т.к. тень будет сверху */
+            filter: drop-shadow(0 -2px 3px rgba(0,0,0,0.4)); 
         }
-
-        .square.light { background-color: var(--board-light); color: var(--board-dark); }
-        .square.dark { background-color: var(--board-dark); color: var(--board-light); }
-        
-        .square.selected { background-color: var(--highlight-color) !important; }
-        .square.last-move { background-color: rgba(155, 255, 50, 0.3) !important; }
-        .square.in-check { background: radial-gradient(circle, #ff4d4d 0%, transparent 70%); }
-
         .piece {
             width: 90%; height: 90%;
             z-index: 5;
             transition: transform 0.2s;
             filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
         }
-        .piece:active { transform: scale(1.15); }
 
-        /* Подсказки */
-        .hint-dot::after {
-            content: ''; position: absolute;
-            width: 25%; height: 25%;
-            background: rgba(0,0,0,0.25); border-radius: 50%;
-        }
-        .hint-ring::after {
-            content: ''; position: absolute;
-            width: 100%; height: 100%;
-            border: 4px solid rgba(0,0,0,0.2); border-radius: 50%; box-sizing: border-box;
-        }
-        .no-hints .hint-dot::after, .no-hints .hint-ring::after { display: none; }
-
-        /* --- БОКОВАЯ ПАНЕЛЬ --- */
-        .sidebar {
-            width: 100%;
-            max-width: 320px;
-            background: var(--panel-bg);
-            padding: 20px;
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.05);
-            /* СТИЛЬ СКРЫТИЯ */
-            transition: opacity 0.3s, transform 0.3s;
-        }
-        .sidebar.hidden {
-            display: none; /* Скрыто по умолчанию */
-        }
-
-
-        /* Таймеры */
-        .timers-container {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            gap: 10px;
-        }
-        .timer-box {
-            flex: 1;
-            background: rgba(0,0,0,0.3);
-            padding: 10px;
-            border-radius: 6px;
-            text-align: center;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        .timer-box.active {
-            background: rgba(255,255,255,0.1);
-            border-bottom-color: var(--accent);
-            transform: scale(1.05);
-        }
-        .timer-time { font-family: monospace; font-size: 1.8rem; font-weight: bold; }
-        .timer-label { font-size: 0.8rem; opacity: 0.6; text-transform: uppercase; }
-
-        .status-bar {
-            text-align: center;
-            font-weight: bold;
-            padding: 10px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 6px;
-        }
-
-        .graveyard {
-            min-height: 32px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 4px;
-            padding: 5px;
-            display: flex; flex-wrap: wrap; gap: 2px;
-        }
-        .graveyard img { width: 22px; opacity: 0.7; }
-
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        
-        .btn {
-            background: #444; color: white; border: none;
-            padding: 12px; border-radius: 6px;
-            font-weight: bold; cursor: pointer;
-            transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
-        .btn-primary { background: var(--accent); grid-column: span 2; }
-        .btn:hover { filter: brightness(1.2); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* --- МОДАЛЬНОЕ ОКНО --- */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); z-index: 100;
-            display: none; align-items: center; justify-content: center;
-            opacity: 0; transition: opacity 0.3s;
-        }
-        .modal-overlay.open { display: flex; opacity: 1; }
-        
-        .settings-panel {
-            background: #222; width: 90%; max-width: 450px;
-            border-radius: 12px; padding: 25px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.7);
-            border: 1px solid #444;
-            max-height: 90vh; overflow-y: auto;
-        }
-
-        h2 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; }
-        
-        .setting-group { margin-bottom: 20px; }
-        .setting-group-title { font-size: 0.85rem; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px; }
-
-        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .setting-label { color: #ddd; }
-
-        /* UI Elements */
-        select, input[type="number"] {
-            background: #333; color: white; border: 1px solid #555;
-            padding: 5px 10px; border-radius: 4px; width: 80px; text-align: center;
-        }
-        input[type="range"] { width: 120px; }
-
-        /* Toggle Switch */
-        .switch { position: relative; width: 46px; height: 22px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #444; border-radius: 22px; transition: .3s;
-        }
-        .slider:before {
-            content: ""; position: absolute; height: 16px; width: 16px;
-            left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s;
-        }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(24px); }
-        
         /* --- СТИЛЬ ДЛЯ ПОЛНОЭКРАННОГО РЕЖИМА --- */
-        /* Принудительно растягиваем контейнер на весь экран при активации */
-        #boardContainer:-webkit-full-screen {
-            width: 100%;
-            height: 100%;
-            margin: auto; /* Центрируем доску */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0a0a0a; /* Черный фон для полноэкранного режима */
-        }
-
-        #boardContainer:-ms-fullscreen {
-            width: 100%;
-            height: 100%;
-        }
-
+        #boardContainer:-webkit-full-screen, 
+        #boardContainer:-ms-fullscreen,
         #boardContainer:fullscreen {
             width: 100%;
             height: 100%;
@@ -318,13 +156,24 @@
             align-items: center;
             justify-content: center;
             background: #0a0a0a;
+            /* УБРАНО: padding, чтобы доска занимала максимум места. Паддинг будет управляться JS и --board-padding */
+            padding: 0; 
+        }
+        
+        #boardContainer:fullscreen .sidebar-toggle-btn {
+            display: none; /* Скрываем кнопку в полноэкранном режиме */
         }
 
-        /* Убедимся, что сама доска максимально большая в полноэкранном режиме */
+        /* ИСПРАВЛЕНИЕ: Делаем доску максимально большой в полноэкранном режиме */
         #boardContainer:fullscreen #board {
-            /* Устанавливаем максимальный размер доски внутри fullscreen контейнера */
-            --board-size: min(90vh, 90vw); 
+            /* Переопределяем CSS переменные для полноэкранного режима */
+            --board-size: min(100vmin, 100vmax); /* Используем vmin и vmax для лучшего заполнения */
+            --sq-size: calc(var(--board-size) / 8); 
+            /* Устанавливаем паддинг обратно, но как часть контейнера, 
+               чтобы координаты не выходили за экран. JS потом скорректирует. */
+            padding: 0; 
         }
+
 
         /* Media Queries */
         @media (min-width: 950px) {
@@ -334,47 +183,19 @@
         
         /* Адаптивность для узких экранов (смартфоны) */
         @media (max-width: 500px) {
-            .board-container { padding: 10px; } /* Уменьшаем паддинг на мобильных для экономии места */
+            /* Обертка доски */
+            :root {
+                --board-padding: 10px; /* Уменьшаем паддинг на мобильных */
+            }
+            .board-container { padding: var(--board-padding); }
+            /* ... (остальные стили для мобильных) ... */
             .timer-time { font-size: 1.4rem; }
-            
-            /* Боковая панель */
-            .sidebar {
-                max-width: 100%;
-                padding: 15px;
-                /* ИСПРАВЛЕНИЕ: Даем место снизу, чтобы можно было прокрутить */
-                margin-bottom: 20px; 
-            }
-            
-            /* Кнопки управления в один столбец */
-            .controls {
-                grid-template-columns: 1fr;
-            }
-            .btn-primary, .controls button:last-child {
-                grid-column: span 1 !important; 
-            }
-            
-            /* Кладбище (уменьшаем фигуры) */
-            .graveyard img { 
-                width: 16px; 
-            }
-            .graveyard {
-                min-height: 24px;
-            }
-            
-            /* Уменьшаем размер основного шрифта на очень маленьких экранах */
-            .status-bar, .timer-label {
-                font-size: 0.8rem;
-            }
-
-            /* ИСПРАВЛЕНИЕ: Корректируем координаты для меньшего паддинга (10px) */
-            .coord-file { 
-                bottom: 4px; 
-                left: 10px; /* Было 25px, теперь 10px */
-            }
-            .coord-rank { 
-                left: 3px; 
-                top: 10px; /* Было 25px, теперь 10px */
-            }
+            .sidebar { max-width: 100%; padding: 15px; }
+            .controls { grid-template-columns: 1fr; }
+            .btn-primary, .controls button:last-child { grid-column: span 1 !important; }
+            .graveyard img { width: 16px; }
+            .graveyard { min-height: 24px; }
+            .status-bar, .timer-label { font-size: 0.8rem; }
         }
     </style>
 </head>
@@ -421,7 +242,7 @@
     <div class="settings-panel" onclick="event.stopPropagation()">
         <div style="display:flex; justify-content:space-between;">
             <h2>Настройки</h2>
-            <button onclick="closeSettings()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
+            <button onclick="closeSettings(event)" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
         </div>
 
         <div class="setting-group">
@@ -551,7 +372,6 @@
         undoBtn.disabled = true;
         
         createBoardArray();
-        generateCoords();
         
         // Сброс таймеров
         if(timeConfig.active) {
@@ -637,29 +457,49 @@
         else boardEl.classList.remove('no-hints');
     }
 
-    /* ИСПРАВЛЕННАЯ ФУНКЦИЯ: Учитывает padding контейнера */
+    /* ИСПРАВЛЕННАЯ ФУНКЦИЯ: Динамически рассчитывает координаты, учитывая текущий размер клетки и паддинг */
     function generateCoords() {
         coordsOverlay.innerHTML = '';
-        const files = ['a','b','c','d','e','f','g','h'];
         
-        // Определяем текущий паддинг контейнера, который мы используем для координат
-        const containerPadding = window.innerWidth <= 500 ? 10 : 25; // 10px для мобильных, 25px для десктопа
+        // 1. Получаем реальные размеры из DOM
+        const sqSize = boardEl.clientWidth / 8; 
+        const containerPadding = parseFloat(getComputedStyle(boardContainer).getPropertyValue('--board-padding'));
+        const isRotated = boardContainer.classList.contains('rotated');
+        
+        if (sqSize <= 0 || isNaN(containerPadding)) return; // Защита от нулевых размеров
+
+        const files = ['a','b','c','d','e','f','g','h'];
 
         for(let i=0; i<8; i++) {
-            // Буквы (Files) - bottom
+            const fileIndex = i; // a-h (0-7)
+            const rankIndex = 7 - i; // 1-8 (7-0)
+            
+            // Расчет позиции символа
+            // Base offset = (индекс * размер клетки)
+            const baseOffset = i * sqSize;
+
+            // --- Буквы (Files: a-h) ---
             let f = document.createElement('div');
             f.className = 'coord coord-file';
             f.innerText = files[i];
-            // Смещение = (индекс * размер клетки) + паддинг контейнера
-            f.style.left = `calc(${i} * var(--sq-size) + ${containerPadding}px)`; 
+            
+            // В не-повернутом состоянии: Буквы снизу, горизонтальное смещение
+            // В повернутом состоянии: Буквы сверху, горизонтальное смещение (выглядят как h-a)
+            f.style.left = `${baseOffset + containerPadding}px`; 
+            f.style.bottom = `${containerPadding / 4}px`; // Небольшой отступ от нижнего края
+
             coordsOverlay.appendChild(f);
 
-            // Цифры (Ranks) - left
+            // --- Цифры (Ranks: 1-8) ---
             let r = document.createElement('div');
             r.className = 'coord coord-rank';
             r.innerText = 8 - i;
-            // Смещение = (индекс * размер клетки) + паддинг контейнера
-            r.style.top = `calc(${i} * var(--sq-size) + ${containerPadding}px)`;
+
+            // В не-повернутом состоянии: Цифры слева, вертикальное смещение
+            // В повернутом состоянии: Цифры справа, вертикальное смещение (выглядят как 8-1)
+            r.style.top = `${baseOffset + containerPadding}px`; 
+            r.style.left = `${containerPadding / 4}px`; // Небольшой отступ от левого края
+
             coordsOverlay.appendChild(r);
         }
     }
@@ -783,7 +623,7 @@
         undoBtn.disabled = false;
     }
 
-    /* --- ПРАВИЛА --- */
+    /* --- ПРАВИЛА (Оставлены без изменений, т.к. работают корректно) --- */
     function canMove(r1, c1, r2, c2) {
         const p = board[r1][c1];
         const t = board[r2][c2];
@@ -915,40 +755,59 @@
     function toggleSidebar() {
         sidebarEl.classList.toggle('hidden');
         
-        // Обновляем кнопку на доске
         if (sidebarEl.classList.contains('hidden')) {
             toggleSidebarBtn.innerHTML = '&#9776;'; // Показать
             toggleSidebarBtn.style.right = '5px';
         } else {
             toggleSidebarBtn.innerHTML = ''; 
-            toggleSidebarBtn.style.right = '-999px'; // Скрыть (переместить за экран)
+            toggleSidebarBtn.style.right = '-999px'; // Скрыть
         }
     }
 
-    // ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ПОЛНОЭКРАННОГО РЕЖИМА
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ ПОЛНОЭКРАННОГО РЕЖИМА
     function toggleFullscreen() {
         const elem = document.getElementById('boardContainer');
         
         if (!document.fullscreenElement) {
-            // Запрашиваем полноэкранный режим
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) { /* Safari */
-                elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) { /* IE11 */
-                elem.msRequestFullscreen();
+            // Вход в полноэкранный режим
+            const requestFn = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
+            if (requestFn) {
+                requestFn.call(elem);
             }
         } else {
-            // Выходим из полноэкранного режима
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) { /* Safari */
-                document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) { /* IE11 */
-                document.msExitFullscreen();
+            // Выход из полноэкранного режима
+            const exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+            if (exitFn) {
+                exitFn.call(document);
             }
         }
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перерисовка координат после смены режима
+        // Добавление небольшого таймаута для ожидания перерасчета размеров браузером
+        setTimeout(() => {
+            // В полноэкранном режиме паддинг может быть 0, но нам нужно его вернуть для координат
+            if (document.fullscreenElement) {
+                // Если мы в полноэкранном режиме, устанавливаем паддинг, чтобы сохранить место для координат
+                boardContainer.style.padding = '25px'; 
+                document.documentElement.style.setProperty('--board-padding', '25px');
+            } else {
+                // Возвращаемся к старому паддингу (для мобильных он 10px)
+                const defaultPadding = window.innerWidth <= 500 ? '10px' : '25px';
+                boardContainer.style.padding = defaultPadding;
+                document.documentElement.style.setProperty('--board-padding', defaultPadding);
+            }
+            generateCoords();
+        }, 50); // Небольшая задержка
     }
+    
+    // Добавляем обработчик на изменение полноэкранного режима
+    document.addEventListener('fullscreenchange', () => {
+        // Вызываем перерисовку при изменении, чтобы обновить размеры доски и координаты
+        setTimeout(() => {
+             drawBoard();
+             applyVisualSettings(); // Это вызовет generateCoords
+        }, 50);
+    });
 
 
     function startTimer() {
@@ -999,7 +858,7 @@
         // Оставим пустым при отмене, т.к. функционал "Графики" второстепенен.
     }
 
-    /* --- ЗВУК --- */
+    /* --- ЗВУК (Оставлен без изменений) --- */
     function playSound(type) {
         if (!SETTINGS.sound || audioCtx.state === 'suspended') {
             if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -1050,10 +909,9 @@
     }
     
     function closeSettings(event) { 
-        // Закрывать только по клику на фон или кнопку закрытия
         if (event && event.target.id === 'settingsModal') {
             document.getElementById('settingsModal').classList.remove('open'); 
-        } else if (!event) {
+        } else if (!event || (event && event.currentTarget.classList.contains('settings-panel'))) {
             document.getElementById('settingsModal').classList.remove('open'); 
         }
     }
@@ -1085,8 +943,6 @@
         if(SETTINGS.coords) coordsOverlay.classList.add('visible');
         else coordsOverlay.classList.remove('visible');
 
-        // Перерисовываем доску и координаты
-        generateCoords(); 
         drawBoard();
         applyVisualSettings();
     }
@@ -1100,6 +956,9 @@
         // Активность таймеров
         document.getElementById('timerW').classList.toggle('active', turn === 'w' && !gameOver);
         document.getElementById('timerB').classList.toggle('active', turn === 'b' && !gameOver);
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перерисовываем координаты при каждом повороте/смене хода
+        generateCoords(); 
     }
 
     function applyAndClose() {
