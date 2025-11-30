@@ -538,7 +538,7 @@
     function isStalemate(c) { return !isCheck(c, board) && isMate(c); }
 
     /* UI & System */
-    function toggleSidebar() { sidebarEl.classList.toggle('hidden'); if(sidebarEl.classList.contains('hidden')){ toggleSidebarBtn.innerHTML='&#9776;'; toggleSidebarBtn.style.right='5px'; } else { toggleSidebarBtn.innerHTML=''; toggleSidebarBtn.style.right='-99px'; } }
+    function toggleSidebar() { sidebarEl.classList.toggle('hidden'); if(sidebarEl.classList.contains('hidden')){ toggleSidebarBtn.innerHTML='&#9776;'; toggleSidebarBtn.style.right='5px'; } else { toggleSidebarBtn.innerHTML=''; toggleSidebarBtn.style.right='5px'; } }
     
     function toggleFullscreen() {
         const el = document.getElementById('boardContainer');
