@@ -59,58 +59,71 @@
         /* --- ОБЕРТКА ДОСКИ --- */
         .board-container {
             position: relative;
-            padding: 25px; /* Место для координат */
+            padding: 20px;
             background: var(--panel-bg);
             border-radius: 8px;
             box-shadow: 0 15px 40px rgba(0,0,0,0.6);
             transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Обертка для точного позиционирования оверлея над доской */
+        .game-board-wrapper {
+            position: relative;
+            width: var(--board-size);
+            height: var(--board-size);
         }
         
         /* КНОПКА ПЕРЕКЛЮЧЕНИЯ БОКОВОЙ ПАНЕЛИ */
         .sidebar-toggle-btn {
             position: absolute;
-            top: 5px; right: 5px;
+            top: 10px; right: 10px;
             background: rgba(255, 255, 255, 0.1);
             color: white;
             border: none;
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 1.2rem;
             line-height: 1;
-            z-index: 10;
-            transition: background 0.2s, right 0.3s;
+            z-index: 20;
+            transition: background 0.2s;
         }
         .sidebar-toggle-btn:hover { background: rgba(255, 255, 255, 0.2); }
-
+        .sidebar-toggle-btn.hidden-btn { display: none; }
 
         /* Координаты */
         .coords-overlay {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0; left: 0; 
+            width: 100%; height: 100%;
             pointer-events: none;
-            display: none; /* Включаются в настройках */
+            display: none; 
+            z-index: 10;
         }
         .coords-overlay.visible { display: block; }
         
         .coord {
             position: absolute;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
-            opacity: 0.8;
-            color: #aaa;
+            opacity: 0.9;
+            color: var(--text-color);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
         }
-        /* Буквы (снизу) */
-        .coord-file { bottom: 4px; text-align: center; width: var(--sq-size); }
-        /* Цифры (слева) */
-        .coord-rank { left: 6px; display: flex; align-items: center; height: var(--sq-size); }
+        /* Буквы (снизу справа в клетке) */
+        .coord-file { bottom: 2px; right: 4px; text-align: right; }
+        /* Цифры (сверху слева в клетке) */
+        .coord-rank { top: 2px; left: 4px; }
 
         /* Сама сетка доски */
         #board {
             display: grid;
             grid-template-columns: repeat(8, var(--sq-size));
             grid-template-rows: repeat(8, var(--sq-size));
-            border: 3px solid #333;
+            border: 0px solid #333; /* Граница не нужна, контейнер дает фон */
         }
 
         /* Поворот доски */
@@ -132,14 +145,15 @@
         .square.dark { background-color: var(--board-dark); color: var(--board-light); }
         
         .square.selected { background-color: var(--highlight-color) !important; }
-        .square.last-move { background-color: rgba(155, 255, 50, 0.3) !important; }
-        .square.in-check { background: radial-gradient(circle, #ff4d4d 0%, transparent 70%); }
+        .square.last-move { background-color: rgba(155, 255, 50, 0.4) !important; }
+        .square.in-check { background: radial-gradient(circle, #ff4d4d 20%, transparent 80%); }
 
         .piece {
             width: 90%; height: 90%;
             z-index: 5;
             transition: transform 0.2s;
             filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+            pointer-events: none; /* ВАЖНО: чтобы картинка не перехватывала клики и не перетаскивалась */
         }
         .piece:active { transform: scale(1.15); }
 
@@ -152,7 +166,7 @@
         .hint-ring::after {
             content: ''; position: absolute;
             width: 100%; height: 100%;
-            border: 4px solid rgba(0,0,0,0.2); border-radius: 50%; box-sizing: border-box;
+            border: 5px solid rgba(0,0,0,0.25); border-radius: 50%; box-sizing: border-box;
         }
         .no-hints .hint-dot::after, .no-hints .hint-ring::after { display: none; }
 
@@ -168,13 +182,11 @@
             gap: 15px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.05);
-            /* СТИЛЬ СКРЫТИЯ */
             transition: opacity 0.3s, transform 0.3s;
         }
         .sidebar.hidden {
-            display: none; /* Скрыто по умолчанию */
+            display: none; 
         }
-
 
         /* Таймеры */
         .timers-container {
@@ -213,9 +225,10 @@
             background: rgba(0,0,0,0.2);
             border-radius: 4px;
             padding: 5px;
-            display: flex; flex-wrap: wrap; gap: 2px;
+            display: flex; flex-wrap: wrap; gap: 4px;
+            align-content: flex-start;
         }
-        .graveyard img { width: 22px; opacity: 0.7; }
+        .graveyard img { width: 22px; opacity: 0.8; display: block; }
 
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         
@@ -246,7 +259,7 @@
             max-height: 90vh; overflow-y: auto;
         }
 
-        h2 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        h2 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; color: #fff;}
         
         .setting-group { margin-bottom: 20px; }
         .setting-group-title { font-size: 0.85rem; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px; }
@@ -254,12 +267,11 @@
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .setting-label { color: #ddd; }
 
-        /* UI Elements */
         select, input[type="number"] {
             background: #333; color: white; border: 1px solid #555;
             padding: 5px 10px; border-radius: 4px; width: 80px; text-align: center;
         }
-        input[type="range"] { width: 120px; }
+        input[type="range"] { width: 120px; cursor: pointer; }
 
         /* Toggle Switch */
         .switch { position: relative; width: 46px; height: 22px; }
@@ -275,80 +287,24 @@
         input:checked + .slider { background-color: var(--accent); }
         input:checked + .slider:before { transform: translateX(24px); }
         
-        /* --- СТИЛЬ ДЛЯ ПОЛНОЭКРАННОГО РЕЖИМА --- */
-        /* Принудительно растягиваем контейнер на весь экран при активации */
-        #boardContainer:-webkit-full-screen {
-            width: 100%;
-            height: 100%;
-            margin: auto; /* Центрируем доску */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0a0a0a; /* Черный фон для полноэкранного режима */
-        }
-
-        #boardContainer:-ms-fullscreen {
-            width: 100%;
-            height: 100%;
-        }
-
-        #boardContainer:fullscreen {
-            width: 100%;
-            height: 100%;
-            margin: auto; 
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0a0a0a;
-        }
-
-        /* Убедимся, что сама доска максимально большая в полноэкранном режиме */
-        #boardContainer:fullscreen #board {
-            /* Устанавливаем максимальный размер доски внутри fullscreen контейнера */
-            --board-size: min(90vh, 90vw); 
-        }
+        /* FULLSCREEN */
+        #boardContainer:-webkit-full-screen { width: 100%; height: 100%; background: #0a0a0a; display:flex;align-items:center;justify-content:center; }
+        #boardContainer:fullscreen { width: 100%; height: 100%; background: #0a0a0a; display:flex;align-items:center;justify-content:center; }
+        #boardContainer:fullscreen #board { --board-size: min(90vh, 90vw); }
+        #boardContainer:fullscreen .game-board-wrapper { width: var(--board-size); height: var(--board-size); }
 
         /* Media Queries */
         @media (min-width: 950px) {
             .main-container { flex-direction: row; align-items: flex-start; }
-            .sidebar { margin-top: 25px; }
+            .sidebar { margin-top: 0; }
         }
         
-        /* Адаптивность для узких экранов (смартфоны) */
         @media (max-width: 500px) {
-            /* Обертка доски */
             .board-container { padding: 10px; }
-            /* Уменьшаем шрифт таймера */
             .timer-time { font-size: 1.4rem; }
-            
-            /* Боковая панель */
-            .sidebar {
-                /* Убедимся, что на очень маленьких экранах она занимает всю ширину */
-                max-width: 100%;
-                padding: 15px;
-            }
-            
-            /* Управление (Кнопки) */
-            .controls {
-                grid-template-columns: 1fr; /* Кнопки управления в один столбец */
-            }
-            /* Кнопки, которые раньше были на 2 столбца, теперь будут на 1 */
-            .btn-primary, .controls button:last-child {
-                grid-column: span 1 !important; 
-            }
-            
-            /* Кладбище (уменьшаем фигуры) */
-            .graveyard img { 
-                width: 16px; 
-            }
-            .graveyard {
-                min-height: 24px;
-            }
-            
-            /* Уменьшаем размер основного шрифта на очень маленьких экранах */
-            .status-bar, .timer-label {
-                font-size: 0.8rem;
-            }
+            .sidebar { max-width: 100%; padding: 15px; }
+            .controls { grid-template-columns: 1fr; }
+            .btn-primary, .controls button:last-child { grid-column: span 1 !important; }
         }
     </style>
 </head>
@@ -356,13 +312,15 @@
 
 <div class="main-container">
     <div id="boardContainer" class="board-container">
-        <button id="toggleSidebarBtn" class="sidebar-toggle-btn" onclick="toggleSidebar()">&#9776;</button>
+        <button id="showSidebarBtn" class="sidebar-toggle-btn hidden-btn" onclick="toggleSidebar()">&#9776;</button>
         
-        <div id="coordsOverlay" class="coords-overlay"></div>
-        <div id="board"></div>
+        <div class="game-board-wrapper">
+            <div id="coordsOverlay" class="coords-overlay"></div>
+            <div id="board"></div>
+        </div>
     </div>
 
-    <div class="sidebar hidden" id="sidebar">
+    <div class="sidebar" id="sidebar">
         <div class="timers-container" id="timerSection">
             <div id="timerW" class="timer-box active">
                 <div class="timer-label">Белые</div>
@@ -411,7 +369,7 @@
                 </select>
             </div>
             <div class="setting-row">
-                <span class="setting-label">Координаты (A-H, 1-8)</span>
+                <span class="setting-label">Координаты</span>
                 <label class="switch"><input type="checkbox" id="coordsToggle" checked onchange="updateSettings()"><span class="slider"></span></label>
             </div>
             <div class="setting-row">
@@ -427,7 +385,7 @@
         <div class="setting-group">
             <div class="setting-group-title">Правила и Помощь</div>
             <div class="setting-row">
-                <span class="setting-label">Подсказка ходов (точки)</span>
+                <span class="setting-label">Подсказка ходов</span>
                 <label class="switch"><input type="checkbox" id="hintsToggle" checked onchange="updateSettings()"><span class="slider"></span></label>
             </div>
             <div class="setting-row">
@@ -467,10 +425,8 @@
     const coordsOverlay = document.getElementById('coordsOverlay');
     const statusEl = document.getElementById('status');
     const undoBtn = document.getElementById('undoBtn');
-    
-    // ДОБАВЛЕННЫЕ ЭЛЕМЕНТЫ
     const sidebarEl = document.getElementById('sidebar');
-    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+    const showSidebarBtn = document.getElementById('showSidebarBtn');
     
     // Состояние
     let board = [];
@@ -478,11 +434,11 @@
     let selected = null;
     let gameOver = false;
     let lastMove = null;
-    let history = []; // Стек для Undo
+    let history = []; 
 
     // Таймер
     let timerInterval = null;
-    let times = { w: 600, b: 600 }; // секунды
+    let times = { w: 600, b: 600 }; 
     let timeConfig = { active: true, start: 10, inc: 0 };
 
     // Настройки
@@ -508,26 +464,25 @@
         b: { k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg', q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg', r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg', b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg', n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg', p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg' }
     };
     
+    // Изначальный состав фигур для подсчета потерь
+    const START_COUNTS = { w: {p:8,n:2,b:2,r:2,q:1}, b: {p:8,n:2,b:2,r:2,q:1} };
+    
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     /* --- ИНИЦИАЛИЗАЦИЯ --- */
-    function initGame(keepSettings = false) {
-        // Сброс логики
+    function initGame() {
         gameOver = false;
         turn = 'w';
         selected = null;
         lastMove = null;
         history = [];
         
-        // Сброс UI
-        document.getElementById('graveyard-w').innerHTML = '';
-        document.getElementById('graveyard-b').innerHTML = '';
         undoBtn.disabled = true;
+        rebuildGraveyard(); // Очистка
         
         createBoardArray();
         generateCoords();
         
-        // Сброс таймеров
         if(timeConfig.active) {
             times.w = timeConfig.start * 60;
             times.b = timeConfig.start * 60;
@@ -542,11 +497,11 @@
         drawBoard();
         updateStatus();
         applyVisualSettings();
+        checkSidebarVisibility();
         
-        // Убедимся, что кнопка-переключатель видима, если панель скрыта
-        if (sidebarEl.classList.contains('hidden')) {
-            toggleSidebarBtn.style.right = '5px';
-            toggleSidebarBtn.innerHTML = '&#9776;';
+        // Resume audio context on user interaction if needed
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(e => console.log(e));
         }
     }
 
@@ -566,19 +521,16 @@
         boardEl.innerHTML = '';
         const inCheck = isCheck(turn, board);
         
-        // Оптимизация: не пересоздавать сетку каждый раз, но для простоты кода оставим так
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const sq = document.createElement('div');
                 sq.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
                 sq.dataset.r = r; sq.dataset.c = c;
                 
-                // Подсветка последнего хода
                 if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) {
                     sq.classList.add('last-move');
                 }
 
-                // Фигура
                 const p = board[r][c];
                 if (p) {
                     const img = document.createElement('img');
@@ -588,11 +540,9 @@
                     if (p.type === 'k' && p.color === turn && inCheck) sq.classList.add('in-check');
                 }
 
-                // Выделение и ходы
                 if (selected && selected.r === r && selected.c === c) sq.classList.add('selected');
                 
                 if (selected) {
-                    // Проверка хода (только если есть selected)
                     if (canMove(selected.r, selected.c, r, c)) {
                         sq.classList.add(p ? 'hint-ring' : 'hint-dot');
                         sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
@@ -615,18 +565,32 @@
         coordsOverlay.innerHTML = '';
         const files = ['a','b','c','d','e','f','g','h'];
         for(let i=0; i<8; i++) {
-            // Буквы (Files) - bottom
+            // Буквы (Files) - снизу
             let f = document.createElement('div');
             f.className = 'coord coord-file';
             f.innerText = files[i];
             f.style.left = `calc(${i} * var(--sq-size))`;
+            f.style.width = 'var(--sq-size)';
+            f.style.top = `calc(7 * var(--sq-size))`; // 8-й ряд визуально
+            f.style.height = 'var(--sq-size)';
+            f.style.pointerEvents = 'none'; // Важно
+            f.style.display = 'flex';
+            f.style.alignItems = 'flex-end';
+            f.style.justifyContent = 'flex-end';
+            f.style.padding = '2px 4px';
             coordsOverlay.appendChild(f);
 
-            // Цифры (Ranks) - left
+            // Цифры (Ranks) - слева
             let r = document.createElement('div');
             r.className = 'coord coord-rank';
             r.innerText = 8 - i;
             r.style.top = `calc(${i} * var(--sq-size))`;
+            r.style.height = 'var(--sq-size)';
+            r.style.left = '0';
+            r.style.width = 'var(--sq-size)';
+            r.style.display = 'flex';
+            r.style.alignItems = 'flex-start';
+            r.style.padding = '2px 4px';
             coordsOverlay.appendChild(r);
         }
     }
@@ -644,8 +608,7 @@
     }
 
     function makeMove(toR, toC) {
-        // 1. Сохраняем состояние для Undo
-        pushHistory();
+        pushHistory(); // Сохраняем перед изменением
 
         const fromR = selected.r;
         const fromC = selected.c;
@@ -657,20 +620,19 @@
         // Взятие
         if (target) {
             moveSound = 'capture';
-            const img = document.createElement('img');
-            img.src = PIECES[target.color][target.type];
-            document.getElementById(target.color === 'w' ? 'graveyard-w' : 'graveyard-b').appendChild(img);
         }
 
         // Рокировка (двигаем ладью)
         if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
             const isKingSide = toC > fromC;
             const rookC = isKingSide ? 7 : 0;
-            const newRookC = isKingSide ? 5 : 3;
+            const newRookC = isKingSide ? 5 : 3; // FIDE: f(5) или d(3)
             const rook = board[toR][rookC];
+            
+            // Перемещаем ладью
             board[toR][newRookC] = rook;
             board[toR][rookC] = null;
-            rook.moved = true;
+            if(rook) rook.moved = true;
             moveSound = 'move';
         }
 
@@ -679,30 +641,32 @@
         board[fromR][fromC] = null;
         p.moved = true;
 
-        // Превращение пешки (авто в ферзя для простоты)
+        // Превращение пешки (Авто-ферзь)
         if (p.type === 'p' && (toR === 0 || toR === 7)) {
             p.type = 'q';
-            moveSound = 'check'; // Звук усиления
+            moveSound = 'check'; 
         }
 
         lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
         
         // Обработка таймера
         if (timeConfig.active) {
-            times[turn] += timeConfig.inc; // Добавка
-            updateTimerDisplay(); // Обновить сразу
+            times[turn] += timeConfig.inc; 
+            updateTimerDisplay(); 
         }
 
         // Смена хода
         turn = turn === 'w' ? 'b' : 'w';
         selected = null;
         
+        rebuildGraveyard(); // Обновляем кладбище
+
         // Проверки состояния
         if (isCheck(turn, board)) {
             moveSound = 'check';
             if (isMate(turn)) {
                 endGame(`Мат! Победа ${turn==='w'?'Черных':'Белых'}`);
-                moveSound = 'capture'; // Финальный аккорд
+                moveSound = 'capture'; 
             } else {
                 statusEl.innerText = "ШАХ!";
             }
@@ -714,20 +678,19 @@
 
         playSound(moveSound);
         drawBoard();
-        applyVisualSettings(); // Обновление поворота и таймера
+        applyVisualSettings();
     }
 
     function undoMove() {
-        if (history.length === 0 || gameOver) return;
+        if (history.length === 0) return;
         
         const state = JSON.parse(history.pop());
         board = state.board;
         turn = state.turn;
         lastMove = state.lastMove;
         times = state.times;
-        gameOver = false;
+        gameOver = false; // Разрешаем играть дальше или анализировать
         
-        // Восстановление кладбища 
         rebuildGraveyard();
 
         if (history.length === 0) undoBtn.disabled = true;
@@ -736,16 +699,19 @@
         drawBoard();
         updateStatus();
         applyVisualSettings();
+        
+        // Если таймер был активен, он продолжит тикать, но значения обновятся
+        updateTimerDisplay();
     }
 
     function pushHistory() {
         history.push(JSON.stringify({
-            board: board, // массивы копируются по ссылке, но JSON делает глубокую копию структуры
+            board: board, 
             turn: turn,
             lastMove: lastMove,
             times: {...times}
         }));
-        if (history.length > 50) history.shift(); // Ограничим историю
+        if (history.length > 50) history.shift(); 
         undoBtn.disabled = false;
     }
 
@@ -753,7 +719,7 @@
     function canMove(r1, c1, r2, c2) {
         const p = board[r1][c1];
         const t = board[r2][c2];
-        if (t && t.color === p.color) return false; // Свои
+        if (t && t.color === p.color) return false; 
 
         const dr = r2-r1, dc = c2-c1;
         const absDr = Math.abs(dr), absDc = Math.abs(dc);
@@ -778,7 +744,7 @@
                 const rook = board[r1][rookC];
                 if (rook && rook.type==='r' && !rook.moved) {
                     if (isPathClear(r1, c1, r1, rookC)) {
-                        // Проверка битых полей
+                        // Проверка битых полей (текущее проверено выше, проверяем проходное и целевое)
                         const step = dc > 0 ? 1 : -1;
                         if (!isSquareAttacked(r1, c1+step, p.color) && !isSquareAttacked(r1, c1+step*2, p.color)) {
                             valid = true;
@@ -809,6 +775,7 @@
         const stepR = Math.sign(r2-r1);
         const stepC = Math.sign(c2-c1);
         let r = r1+stepR, c = c1+stepC;
+        // Цикл пока не дойдем до целевой клетки (не включая её)
         while(r!==r2 || c!==c2) {
             if (board[r][c]) return false;
             r+=stepR; c+=stepC;
@@ -818,7 +785,6 @@
 
     function isCheck(color, b) {
         let kR, kC;
-        // Найти короля
         b.forEach((row, r) => row.forEach((p, c) => {
             if (p && p.type === 'k' && p.color === color) { kR=r; kC=c; }
         }));
@@ -827,24 +793,20 @@
 
     function isSquareAttacked(r, c, color, b=board) {
         const enemy = color === 'w' ? 'b' : 'w';
-        // Упрощенная проверка атак (проходим по всем врагам)
-        // В реальном движке лучше проверять лучи ОТ короля, но здесь для краткости так:
         for (let i=0; i<8; i++) {
             for (let j=0; j<8; j++) {
                 const p = b[i][j];
                 if (p && p.color === enemy) {
-                    // Грязный хак: используем логику canMove, но без проверки на шах (infinite loop prevent)
-                    // Для пешек атака отличается от движения
                     if (p.type === 'p') {
                         const dir = p.color==='w' ? -1 : 1;
-                        if (Math.abs(j-c) === 1 && (r-i) === dir) return true;
+                        // Пешка бьет по диагонали в направлении движения
+                        // i (враг) + dir = r (цель). 
+                        if (Math.abs(j-c) === 1 && (i + dir === r)) return true;
                     } 
                     else if (p.type === 'k') {
                         if (Math.abs(r-i)<=1 && Math.abs(c-j)<=1) return true;
                     }
                     else {
-                        // Для остальных фигур геометрия та же
-                        // Важно: здесь мы дублируем логику геометрии, чтобы не вызывать canMove рекурсивно
                         const dr = r-i, dc = c-j;
                         const absDr=Math.abs(dr), absDc=Math.abs(dc);
                         let geo = false;
@@ -880,42 +842,27 @@
 
     /* --- СИСТЕМНЫЕ ФУНКЦИИ --- */
     
-    // ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ БОКОВОЙ ПАНЕЛИ
     function toggleSidebar() {
         sidebarEl.classList.toggle('hidden');
-        
-        // Обновляем кнопку на доске
+        checkSidebarVisibility();
+    }
+    
+    function checkSidebarVisibility() {
         if (sidebarEl.classList.contains('hidden')) {
-            toggleSidebarBtn.innerHTML = '&#9776;'; // Показать
-            toggleSidebarBtn.style.right = '5px';
+            showSidebarBtn.classList.remove('hidden-btn');
         } else {
-            toggleSidebarBtn.innerHTML = ''; 
-            toggleSidebarBtn.style.right = '-999px'; // Скрыть (переместить за экран)
+            showSidebarBtn.classList.add('hidden-btn');
         }
     }
 
-    // ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ПОЛНОЭКРАННОГО РЕЖИМА
     function toggleFullscreen() {
         const elem = document.getElementById('boardContainer');
-        
         if (!document.fullscreenElement) {
-            // Запрашиваем полноэкранный режим
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) { /* Safari */
-                elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) { /* IE11 */
-                elem.msRequestFullscreen();
-            }
+            if (elem.requestFullscreen) elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
         } else {
-            // Выходим из полноэкранного режима
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) { /* Safari */
-                document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) { /* IE11 */
-                document.msExitFullscreen();
-            }
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         }
     }
 
@@ -939,6 +886,7 @@
 
     function updateTimerDisplay() {
         const fmt = (t) => {
+            if (t < 0) t = 0;
             const m = Math.floor(t/60).toString().padStart(2,'0');
             const s = (t%60).toString().padStart(2,'0');
             return `${m}:${s}`;
@@ -952,6 +900,7 @@
         stopTimer();
         statusEl.innerText = msg;
         statusEl.style.background = "rgba(255, 50, 50, 0.3)";
+        // Не отключаем Undo, чтобы можно было смотреть
     }
 
     function updateStatus() {
@@ -962,17 +911,52 @@
     }
 
     function rebuildGraveyard() {
-        document.getElementById('graveyard-w').innerHTML = '';
-        document.getElementById('graveyard-b').innerHTML = '';
-        // В идеале нужно сравнивать текущую доску с начальной, но это сложно.
-        // Оставим пустым при отмене, т.к. функционал "Графики" второстепенен.
+        // Подсчитываем текущие фигуры
+        const counts = { w: {p:0,n:0,b:0,r:0,q:0}, b: {p:0,n:0,b:0,r:0,q:0} };
+        board.forEach(row => row.forEach(p => {
+            if(p && p.type !== 'k') counts[p.color][p.type]++;
+        }));
+
+        // Сравниваем с начальными
+        const renderGrave = (color, containerId) => {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            // Проходим по типам фигур
+            ['q','r','b','n','p'].forEach(type => {
+                // Если пешка стала ферзем, она ушла из пешек и пришла в ферзи.
+                // В простом подсчете потерь: 
+                // Start - Current = Lost.
+                // Если мы превратили пешку в ферзя: пешек стало меньше, ферзей больше.
+                // Потери пешек = 1, Ферзей = -1.
+                // Чтобы не показывать отрицательные потери (превращения), используем Math.max(0, ...)
+                // Это упрощенная логика, но визуально понятная.
+                
+                let lost = START_COUNTS[color][type] - counts[color][type];
+                // Коррекция для превращенных пешек: 
+                // Мы не можем точно знать без трекинга, была ли фигура съедена или превращена, 
+                // но для простого UI просто показываем недостающие фигуры.
+                
+                // Хакинг для превращения: если ферзей больше, чем было, значит пешка стала ферзем.
+                // Игнорируем "отрицательные" потери.
+                
+                for(let i=0; i<lost; i++) {
+                    const img = document.createElement('img');
+                    img.src = PIECES[color][type];
+                    container.appendChild(img);
+                }
+            });
+        };
+
+        renderGrave('w', 'graveyard-w');
+        renderGrave('b', 'graveyard-b');
     }
 
     /* --- ЗВУК --- */
     function playSound(type) {
-        if (!SETTINGS.sound || audioCtx.state === 'suspended') {
-            if(audioCtx.state === 'suspended') audioCtx.resume();
-            if(!SETTINGS.sound) return;
+        if (!SETTINGS.sound) return;
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
         }
         
         const osc = audioCtx.createOscillator();
@@ -1012,7 +996,6 @@
     }
 
     function updateSettings() {
-        // Чтение значений
         SETTINGS.theme = document.getElementById('themeSelect').value;
         SETTINGS.hints = document.getElementById('hintsToggle').checked;
         SETTINGS.coords = document.getElementById('coordsToggle').checked;
@@ -1020,7 +1003,6 @@
         SETTINGS.autoRotate = document.getElementById('rotateToggle').checked;
         SETTINGS.highlightOpacity = document.getElementById('highlightRange').value / 100;
 
-        // Применение CSS переменных
         const t = THEMES[SETTINGS.theme];
         const r = document.documentElement.style;
         r.setProperty('--board-light', t.l);
@@ -1028,7 +1010,6 @@
         r.setProperty('--accent', t.a);
         r.setProperty('--highlight-opacity', SETTINGS.highlightOpacity);
         
-        // Координаты
         if(SETTINGS.coords) coordsOverlay.classList.add('visible');
         else coordsOverlay.classList.remove('visible');
 
@@ -1037,25 +1018,22 @@
     }
 
     function applyVisualSettings() {
-        // Поворот доски
-        const rot = SETTINGS.autoRotate && turn === 'b' && !gameOver;
+        const rot = SETTINGS.autoRotate && turn === 'b';
         if(rot) boardContainer.classList.add('rotated');
         else boardContainer.classList.remove('rotated');
         
-        // Активность таймеров
         document.getElementById('timerW').classList.toggle('active', turn === 'w' && !gameOver);
         document.getElementById('timerB').classList.toggle('active', turn === 'b' && !gameOver);
     }
 
     function applyAndClose() {
-        // Сохраняем конфиг таймера
         timeConfig.active = document.getElementById('timerToggle').checked;
         timeConfig.start = parseInt(document.getElementById('timeInput').value) || 10;
         timeConfig.inc = parseInt(document.getElementById('incrementInput').value) || 0;
         
         updateSettings();
         closeSettings();
-        initGame(); // Перезапуск для применения времени
+        initGame(); 
     }
 
     // Старт
