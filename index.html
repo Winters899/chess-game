@@ -23,7 +23,11 @@
             --sq-size: calc(var(--board-size) / 8);
         }
 
-        * { box-sizing: border-box; }
+        * { 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent; /* Убирает черную подсветку клика */
+            -webkit-touch-callout: none; /* Убирает меню при долгом нажатии */
+        }
 
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -45,6 +49,30 @@
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
+        }
+        /* --- ЗАСТАВКА (SPLASH SCREEN) --- */
+        #splash-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f1014; z-index: 9999;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            transition: opacity 0.8s ease-out, visibility 0.8s;
+        }
+        #splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        
+        .splash-title {
+            font-size: 4rem; font-weight: 900;
+            background: linear-gradient(45deg, #81b64c, #ffffff);
+            -webkit-background-clip: text;
+            background-clip: text; /* Добавлено стандартное свойство для совместимости */
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            animation: pulseText 2s infinite;
+        }
+        
+        @keyframes pulseText {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
         }
 
         .main-container {
@@ -69,7 +97,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            transform: translateZ(0); /* Включает GPU для устранения графических глюков */
         }
 
         /* Обертка для позиционирования оверлеев */
@@ -126,7 +154,7 @@
             height: 100%;
             border: 3px solid #333;
             /* Плавный поворот */
-            transition: transform 0.6s ease;
+            touch-action: none; /* Запрещает зум/скролл при касании доски */
         }
 
         /* Вращение ПРИМЕНЯЕТСЯ К ДОСКЕ, А НЕ К КОНТЕЙНЕРУ */
@@ -235,6 +263,9 @@
     </style>
 </head>
 <body>
+<div id="splash-screen">
+    <div class="splash-title">FriendMy.ru</div>
+</div>
 
 <div class="main-container">
     <div id="boardContainer" class="board-container">
@@ -258,9 +289,10 @@
         </div>
         <div class="controls">
             <button class="btn btn-primary" onclick="initGame()">Новая игра</button>
+            <button class="btn" id="modeBtn" onclick="toggleMode()" style="grid-column: span 2;">👤 Противник: Человек</button>
             <button class="btn" id="undoBtn" onclick="undoMove()" disabled>↩ Назад</button>
             <button class="btn" onclick="openSettings()">⚙ Настройки</button>
-            <button class="btn" onclick="toggleFullscreen()">📺 Во весь экран</button>
+            <button class="btn" onclick="toggleFullscreen()" style="grid-column: span 2;">📺 Во весь экран</button>
             <button class="btn" onclick="toggleSidebar()" style="grid-column: span 2;">&#10006; Скрыть</button> 
         </div>
     </div>
@@ -272,6 +304,8 @@
             <h2 style="margin:0; color:#fff;">Настройки</h2>
             <button onclick="closeSettings()" style="background:none; border:none; color:#fff; font-size:1.5rem;">&times;</button>
         </div>
+        <div class="setting-row"><span>Противник</span><select id="opponentSelect" onchange="updateSettings()"><option value="human">Человек</option><option value="ai">Компьютер</option></select></div>
+        <div class="setting-row" id="difficultyRow" style="display:none;"><span>Сложность</span><select id="difficultySelect" onchange="updateSettings()"><option value="0">Легкий</option><option value="1" selected>Средний</option><option value="2">Сложный</option></select></div>
         <div class="setting-row"><span>Тема</span><select id="themeSelect" onchange="updateSettings()"><option value="classic">Классика</option><option value="ocean">Океан</option><option value="graphite">Графит</option><option value="ruby">Рубин</option><option value="purple">Неон</option></select></div>
         <div class="setting-row"><span>Координаты</span><label class="switch"><input type="checkbox" id="coordsToggle" checked onchange="updateSettings()"><span class="slider"></span></label></div>
         <div class="setting-row"><span>Авто-поворот</span><label class="switch"><input type="checkbox" id="rotateToggle" onchange="updateSettings()"><span class="slider"></span></label></div>
@@ -298,7 +332,10 @@
     let board = [], turn = 'w', selected = null, gameOver = false, lastMove = null, history = [];
     let times = { w: 600, b: 600 }, timerInterval = null, timeConfig = { active: true, start: 10, inc: 0 };
     
-    const SETTINGS = { theme: 'classic', hints: true, coords: true, sound: true, autoRotate: false };
+    // --- ИСПРАВЛЕНИЕ 1: Переменная для таймера ИИ ---
+    let aiTimer = null; 
+
+    const SETTINGS = { theme: 'classic', hints: true, coords: true, sound: true, autoRotate: false, opponent: 'human', difficulty: 1 };
     const THEMES = {
         classic: { l: '#ebecd0', d: '#779556', a: '#81b64c' },
         ocean:   { l: '#dee3e6', d: '#8ca2ad', a: '#6b8e9e' },
@@ -314,13 +351,16 @@
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     function initGame() {
+        // --- ИСПРАВЛЕНИЕ 2: Сброс таймера ИИ при старте ---
+        if (aiTimer) clearTimeout(aiTimer);
+        
         gameOver = false; turn = 'w'; selected = null; lastMove = null; history = [];
         undoBtn.disabled = true;
         createBoardArray(); 
         if(timeConfig.active) { times.w = times.b = timeConfig.start * 60; updateTimerDisplay(); startTimer(); }
         else stopTimer();
         
-        rebuildGraveyard(); // Сброс фигур
+        rebuildGraveyard();
         if (sidebarEl.classList.contains('hidden')) { toggleSidebarBtn.style.right = '5px'; toggleSidebarBtn.innerHTML = '&#9776;'; }
         
         updateStatus();
@@ -328,6 +368,10 @@
         applyVisualSettings(); 
         
         window.addEventListener('resize', generateCoords);
+
+        if (SETTINGS.opponent === 'ai' && turn === 'b') {
+            makeAIMove();
+        }
     }
 
     function createBoardArray() {
@@ -343,37 +387,41 @@
 
     function drawBoard() {
         boardEl.innerHTML = '';
-        const inCheck = isCheck(turn, board);
-        for (let r=0; r<8; r++) {
-            for (let c=0; c<8; c++) {
-                const sq = document.createElement('div');
-                sq.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
-                sq.onclick = () => selectSquare(r, c);
-                
-                if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) sq.classList.add('last-move');
-                if (selected && selected.r===r && selected.c===c) sq.classList.add('selected');
+        // Добавляем try-catch, чтобы если отрисовка сломалась, мы увидели ошибку в консоли, а не просто черный экран
+        try {
+            const inCheck = isCheck(turn, board);
+            for (let r=0; r<8; r++) {
+                for (let c=0; c<8; c++) {
+                    const sq = document.createElement('div');
+                    sq.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
+                    sq.onclick = () => selectSquare(r, c);
+                    
+                    if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) sq.classList.add('last-move');
+                    if (selected && selected.r===r && selected.c===c) sq.classList.add('selected');
 
-                const p = board[r][c];
-                if (p) {
-                    const img = document.createElement('img'); img.className = 'piece';
-                    img.src = PIECES[p.color][p.type]; sq.appendChild(img);
-                    if (p.type === 'k' && p.color === turn && inCheck) sq.classList.add('in-check');
+                    const p = board[r][c];
+                    if (p) {
+                        const img = document.createElement('img'); img.className = 'piece';
+                        img.src = PIECES[p.color][p.type]; sq.appendChild(img);
+                        if (p.type === 'k' && p.color === turn && inCheck) sq.classList.add('in-check');
+                    }
+                    
+                    // Здесь была потенциальная опасность, если canMove упадет
+                    if (selected && canMove(selected.r, selected.c, r, c)) {
+                        sq.classList.add(p ? 'hint-ring' : 'hint-dot');
+                        sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
+                    }
+                    boardEl.appendChild(sq);
                 }
-                
-                if (selected && canMove(selected.r, selected.c, r, c)) {
-                    sq.classList.add(p ? 'hint-ring' : 'hint-dot');
-                    sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
-                }
-                boardEl.appendChild(sq);
             }
+            boardEl.className = SETTINGS.hints ? '' : 'no-hints';
+            if(SETTINGS.autoRotate && turn === 'b' && !gameOver) boardEl.classList.add('rotated');
+            else boardEl.classList.remove('rotated');
+        } catch (e) {
+            console.error("Ошибка отрисовки:", e);
         }
-        boardEl.className = SETTINGS.hints ? '' : 'no-hints';
-        // Применяем класс поворота к доске
-        if(SETTINGS.autoRotate && turn === 'b' && !gameOver) boardEl.classList.add('rotated');
-        else boardEl.classList.remove('rotated');
     }
 
-    /* --- ГЕНЕРАЦИЯ КООРДИНАТ --- */
     function generateCoords() {
         coordsOverlay.innerHTML = '';
         if(!SETTINGS.coords) return;
@@ -382,44 +430,68 @@
         const files = isRotated ? ['h','g','f','e','d','c','b','a'] : ['a','b','c','d','e','f','g','h'];
         const ranks = isRotated ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
         
-        // Создаем буквы (Files) - Снизу. Используем проценты для точности.
         for(let i=0; i<8; i++) {
             const el = document.createElement('div');
             el.className = 'coord';
             el.innerText = files[i];
-            el.style.bottom = '-20px'; // В зоне паддинга
-            el.style.left = `calc(${i} * 12.5% + 6.25%)`; // 100% / 8 = 12.5%
+            el.style.bottom = '-20px';
+            el.style.left = `calc(${i} * 12.5% + 6.25%)`; 
             el.style.transform = 'translateX(-50%)';
             coordsOverlay.appendChild(el);
         }
         
-        // Создаем цифры (Ranks) - Слева
         for(let i=0; i<8; i++) {
             const el = document.createElement('div');
             el.className = 'coord';
             el.innerText = ranks[i];
-            el.style.left = '-15px'; // В зоне паддинга
+            el.style.left = '-15px';
             el.style.top = `calc(${i} * 12.5% + 6.25%)`; 
             el.style.transform = 'translateY(-50%)';
             coordsOverlay.appendChild(el);
         }
     }
 
-    /* --- ЛОГИКА --- */
     function selectSquare(r, c) {
-        if (gameOver) return;
-        const p = board[r][c];
-        if (p && p.color === turn) selected = { r, c };
-        else selected = null;
-        drawBoard();
-    }
+            if (gameOver) return;
+            // 1. Блокировка UI: запрещаем кликать, если сейчас ход компьютера
+            if (SETTINGS.opponent === 'ai' && turn === 'b') return;
+
+            const p = board[r][c];
+            
+            // 2. UX: Если кликнули на уже выбранную фигуру — снимаем выделение
+            if (selected && selected.r === r && selected.c === c) {
+                selected = null;
+            } 
+            // Иначе, если это наша фигура — выбираем её
+            else if (p && p.color === turn) {
+                selected = { r, c };
+            } 
+            // Если клик в пустоту или врага — сброс
+            else {
+                selected = null;
+            }
+            drawBoard();
+        }
 
     function makeMove(toR, toC) {
+        if (!selected) return; // Защита
+        
+        const fromR = selected.r, fromC = selected.c;
+        const p = board[fromR][fromC];
+        
+        // --- ИСПРАВЛЕНИЕ 3: Критическая защита от краша ---
+        // Если фигуры нет (например, из-за рассинхрона), выходим, не ломая игру.
+        if (!p) {
+            console.warn("Попытка хода несуществующей фигурой");
+            selected = null;
+            drawBoard();
+            return;
+        }
+
         pushHistory();
-        const fromR = selected.r, fromC = selected.c, p = board[fromR][fromC], target = board[toR][toC];
+        const target = board[toR][toC];
         let moveSound = target ? 'capture' : 'move';
 
-        // Рокировка
         if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
             const isKingSide = toC > fromC;
             const rookC = isKingSide ? 7 : 0, newRookC = isKingSide ? 5 : 3;
@@ -435,8 +507,7 @@
         if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         
         turn = turn === 'w' ? 'b' : 'w'; selected = null;
-        
-        rebuildGraveyard(); // Обновляем кладбище
+        rebuildGraveyard();
 
         if (isCheck(turn, board)) {
             moveSound = 'check';
@@ -448,10 +519,17 @@
         playSound(moveSound);
         drawBoard();
         applyVisualSettings();
+
+        if (!gameOver && SETTINGS.opponent === 'ai' && turn === 'b') {
+            makeAIMove();
+        }
     }
 
     function undoMove() {
         if (!history.length) return;
+        // При отмене хода тоже нужно сбрасывать таймер ИИ, чтобы он не походил на старой доске
+        if (aiTimer) clearTimeout(aiTimer);
+        
         const state = JSON.parse(history.pop());
         board = state.board; turn = state.turn; lastMove = state.lastMove; times = state.times; gameOver = false;
         if (!history.length) undoBtn.disabled = true;
@@ -477,9 +555,125 @@
         });
     }
 
-    /* Проверки (оставлены компактно, так как рабочие) */
+    function canMoveInternal(r1, c1, r2, c2, b) {
+        const p = b[r1][c1], t = b[r2][c2];
+        if (!p || (t && t.color === p.color)) return false;
+        if (!canMove(r1, c1, r2, c2, b)) return false; 
+        
+        const temp = b.map(r => r.map(c => c ? {...c} : null)); 
+        temp[r2][c2] = temp[r1][c1]; 
+        temp[r1][c1] = null;
+
+        if (p.type === 'p' && (r2 === 0 || r2 === 7)) {
+            temp[r2][c2] = { color: p.color, type: 'q', symbol: p.color === 'w' ? '♕' : '♛' };
+        }
+        return !isCheck(p.color, temp);
+    }
+
+    function getValidMoves(currentBoard, color) {
+        const moves = [];
+        for (let r1 = 0; r1 < 8; r1++) {
+            for (let c1 = 0; c1 < 8; c1++) {
+                const piece = currentBoard[r1][c1];
+                if (piece && piece.color === color) {
+                    for (let r2 = 0; r2 < 8; r2++) {
+                        for (let c2 = 0; c2 < 8; c2++) {
+                            // Передаем currentBoard, чтобы canMoveInternal проверял переданную доску, а не глобальную
+                            if (canMoveInternal(r1, c1, r2, c2, currentBoard)) {
+                                moves.push({ fr: r1, fc: c1, tr: r2, tc: c2, piece });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return moves;
+    }
+    
+// Вспомогательная функция оценки доски (материал)
+    function evaluateBoard(b) {
+        const weights = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
+        let score = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = b[r][c];
+                if (p) {
+                    // Черные (ИИ) хотят максимизировать score, Белые - минимизировать
+                    score += (p.color === 'b' ? weights[p.type] : -weights[p.type]);
+                }
+            }
+        }
+        return score;
+    }
+
+    function findBestMove(difficulty) {
+        const moves = getValidMoves(board, turn); // turn всегда 'b' для ИИ здесь
+        if (!moves.length) return null;
+
+        // Для "Легкого" уровня оставляем элемент случайности
+        if (difficulty === 0 && Math.random() > 0.6) {
+             return moves[Math.floor(Math.random() * moves.length)];
+        }
+
+        let bestMove = null;
+        let maxVal = -Infinity;
+
+        // Простой перебор ходов (глубина 1)
+        for (const move of moves) {
+            // Создаем временную копию доски для проверки хода
+            const tempBoard = board.map(r => r.map(c => c ? { ...c } : null));
+            
+            // Делаем ход на виртуальной доске
+            tempBoard[move.tr][move.tc] = tempBoard[move.fr][move.fc];
+            tempBoard[move.fr][move.fc] = null;
+            
+            // Если пешка дошла до края — превращаем в ферзя для оценки
+            if (tempBoard[move.tr][move.tc].type === 'p' && (move.tr === 0 || move.tr === 7)) {
+                tempBoard[move.tr][move.tc].type = 'q';
+            }
+
+            // Оцениваем позицию
+            let val = evaluateBoard(tempBoard);
+            
+            // Небольшая случайность для одинаково хороших ходов, чтобы игры отличались
+            val += Math.random() * 0.5;
+
+            if (val > maxVal) {
+                maxVal = val;
+                bestMove = move;
+            }
+        }
+        return bestMove;
+    }
+    
+    function makeAIMove() {
+        stopTimer(); 
+        updateStatus("ИИ думает...");
+        
+        // --- ИСПРАВЛЕНИЕ 4: Используем переменную aiTimer ---
+        aiTimer = setTimeout(() => {
+            // Если игра уже закончилась пока ИИ думал - ничего не делаем
+            if(gameOver) return;
+
+            const move = findBestMove(SETTINGS.difficulty);
+            
+            if (move) {
+                selected = { r: move.fr, c: move.fc };
+                makeMove(move.tr, move.tc); 
+            } else {
+                endGame(isCheck(turn, board) ? (turn === 'w' ? "Мат! Победа Черных" : "Мат! Победа Белых") : "Пат. Ничья.");
+            }
+            
+            if (!gameOver && timeConfig.active) startTimer();
+            
+        }, 300 + 200 * SETTINGS.difficulty);
+    }
+
     function canMove(r1, c1, r2, c2) {
         const p = board[r1][c1], t = board[r2][c2];
+        // --- ИСПРАВЛЕНИЕ 5: Проверка существования фигуры p ---
+        if (!p) return false; 
+        
         if (t && t.color === p.color) return false;
         const dr = r2-r1, dc = c2-c1, absDr = Math.abs(dr), absDc = Math.abs(dc);
         let valid = false;
@@ -492,7 +686,7 @@
         else if (p.type === 'n') valid = absDr*absDc === 2;
         else if (p.type === 'k') {
             valid = Math.max(absDr, absDc) === 1;
-            if (dr===0 && absDc===2 && !p.moved && !isCheck(p.color, board)) { // Castling logic
+            if (dr===0 && absDc===2 && !p.moved && !isCheck(p.color, board)) {
                  const rookC = dc > 0 ? 7 : 0, rook = board[r1][rookC];
                  if(rook && !rook.moved && isPathClear(r1, c1, r1, rookC)) {
                      const step = dc > 0 ? 1 : -1;
@@ -517,7 +711,13 @@
         while(r!==r2 || c!==c2) { if (board[r][c]) return false; r+=sr; c+=sc; }
         return true;
     }
-    function isCheck(c, b) { let kr, kc; b.forEach((row, r) => row.forEach((p, col) => { if(p?.type==='k' && p.color===c) { kr=r; kc=col; } })); return isSquareAttacked(kr, kc, c, b); }
+    function isCheck(c, b) { 
+        let kr, kc; 
+        b.forEach((row, r) => row.forEach((p, col) => { if(p?.type==='k' && p.color===c) { kr=r; kc=col; } })); 
+        // --- ИСПРАВЛЕНИЕ 6: Защита, если король не найден (например при баге) ---
+        if (kr === undefined) return false; 
+        return isSquareAttacked(kr, kc, c, b); 
+    }
     function isSquareAttacked(r, c, color, b) {
         const enemy = color==='w'?'b':'w';
         for(let i=0; i<8; i++) for(let j=0; j<8; j++) {
@@ -537,14 +737,12 @@
     function isMate(c) { for(let r=0;r<8;r++) for(let col=0;col<8;col++) if(board[r][col]?.color===c) for(let tr=0;tr<8;tr++) for(let tc=0;tc<8;tc++) if(canMove(r,col,tr,tc)) return false; return true; }
     function isStalemate(c) { return !isCheck(c, board) && isMate(c); }
 
-    /* UI & System */
     function toggleSidebar() { sidebarEl.classList.toggle('hidden'); if(sidebarEl.classList.contains('hidden')){ toggleSidebarBtn.innerHTML='&#9776;'; toggleSidebarBtn.style.right='5px'; } else { toggleSidebarBtn.innerHTML=''; toggleSidebarBtn.style.right='5px'; } }
     
     function toggleFullscreen() {
         const el = document.getElementById('boardContainer');
         if(!document.fullscreenElement) { (el.requestFullscreen||el.webkitRequestFullscreen).call(el); }
         else { (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
-        // При смене режима браузер сработает resize, который вызовет generateCoords
     }
 
     function startTimer() { if(timerInterval) clearInterval(timerInterval); timerInterval = setInterval(() => { if(gameOver) return; times[turn]--; updateTimerDisplay(); if(times[turn]<=0) endGame(`Время вышло!`); }, 1000); }
@@ -553,7 +751,6 @@
     function endGame(msg) { gameOver=true; stopTimer(); statusEl.innerText=msg; statusEl.style.background="rgba(255,50,50,0.3)"; }
     function updateStatus() { if(!gameOver) { statusEl.innerText = turn==='w'?"Ход Белых":"Ход Черных"; statusEl.style.background=""; } }
 
-    /* --- УЛУЧШЕННЫЙ ЗВУКОВОЙ ДВИЖОК --- */
     function playSound(type) {
         if (!SETTINGS.sound) return;
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -566,7 +763,6 @@
         const now = audioCtx.currentTime;
 
         if (type === 'move') {
-            // Мягкий стук
             osc.frequency.setValueAtTime(150, now);
             osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
             gain.gain.setValueAtTime(0.5, now);
@@ -574,7 +770,6 @@
             osc.start(now);
             osc.stop(now + 0.15);
         } else if (type === 'capture') {
-            // Более резкий звук
             osc.frequency.setValueAtTime(600, now);
             osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
             gain.gain.setValueAtTime(0.5, now);
@@ -582,7 +777,6 @@
             osc.start(now);
             osc.stop(now + 0.15);
         } else if (type === 'check') {
-            // Предупреждение
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(400, now);
             gain.gain.setValueAtTime(0.3, now);
@@ -592,13 +786,25 @@
         }
     }
 
-    /* Настройки */
     function openSettings() { document.getElementById('settingsModal').classList.add('open'); }
     function closeSettings(e) { if(!e || e.target.id==='settingsModal') document.getElementById('settingsModal').classList.remove('open'); }
     function toggleTimerSettings() { const on=document.getElementById('timerToggle').checked; document.getElementById('timerOptions').style.opacity=on?1:0.4; }
     
     function updateSettings() {
         SETTINGS.theme = document.getElementById('themeSelect').value;
+        SETTINGS.opponent = document.getElementById('opponentSelect').value; 
+        SETTINGS.difficulty = parseInt(document.getElementById('difficultySelect').value);
+        document.getElementById('difficultyRow').style.display = SETTINGS.opponent === 'ai' ? 'flex' : 'none';
+
+        const modeBtn = document.getElementById('modeBtn');
+        if (SETTINGS.opponent === 'human') {
+            modeBtn.innerHTML = '👤 Противник: Человек';
+            modeBtn.style.background = '';
+        } else {
+            modeBtn.innerHTML = '🤖 Противник: Компьютер';
+            modeBtn.style.background = '#4a6fa5';
+        }
+
         SETTINGS.coords = document.getElementById('coordsToggle').checked;
         SETTINGS.autoRotate = document.getElementById('rotateToggle').checked;
         SETTINGS.hints = document.getElementById('hintsToggle').checked;
@@ -611,10 +817,13 @@
         coordsOverlay.classList.toggle('visible', SETTINGS.coords);
         drawBoard(); 
         applyVisualSettings();
+
+        if (!gameOver && SETTINGS.opponent === 'ai' && turn === 'b') {
+            makeAIMove();
+        }
     }
 
     function applyVisualSettings() {
-        // Здесь обновляем таймеры, а также перерисовываем координаты, т.к. поворот мог измениться
         document.getElementById('timerW').classList.toggle('active', turn==='w'&&!gameOver);
         document.getElementById('timerB').classList.toggle('active', turn==='b'&&!gameOver);
         generateCoords();
@@ -627,7 +836,20 @@
         updateSettings(); closeSettings(); initGame();
     }
 
+    function toggleMode() {
+        const select = document.getElementById('opponentSelect');
+        select.value = (select.value === 'human') ? 'ai' : 'human';
+        updateSettings();
+    }
+    
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            document.getElementById('splash-screen').classList.add('hidden');
+        }, 2000);
+    });
+
     initGame();
 </script>
+
 </body>
 </html>
