@@ -558,7 +558,7 @@
     function canMoveInternal(r1, c1, r2, c2, b) {
         const p = b[r1][c1], t = b[r2][c2];
         if (!p || (t && t.color === p.color)) return false;
-        if (!canMove(r1, c1, r2, c2, b)) return false; 
+        if (!canMove(r1, c1, r2, c2, b)) return false; // ВАЖНО: передаем 'b'
         
         const temp = b.map(r => r.map(c => c ? {...c} : null)); 
         temp[r2][c2] = temp[r1][c1]; 
@@ -655,23 +655,28 @@
             // Если игра уже закончилась пока ИИ думал - ничего не делаем
             if(gameOver) return;
 
-            const move = findBestMove(SETTINGS.difficulty);
-            
-            if (move) {
-                selected = { r: move.fr, c: move.fc };
-                makeMove(move.tr, move.tc); 
-            } else {
-                endGame(isCheck(turn, board) ? (turn === 'w' ? "Мат! Победа Черных" : "Мат! Победа Белых") : "Пат. Ничья.");
+            try {
+                const move = findBestMove(SETTINGS.difficulty);
+                
+                if (move) {
+                    selected = { r: move.fr, c: move.fc };
+                    makeMove(move.tr, move.tc); 
+                } else {
+                    endGame(isCheck(turn, board) ? (turn === 'w' ? "Мат! Победа Черных" : "Мат! Победа Белых") : "Пат. Ничья.");
+                }
+            } catch (error) {
+                console.error("Ошибка ИИ:", error);
+                statusEl.innerText = "Ошибка ИИ";
             }
             
             if (!gameOver && timeConfig.active) startTimer();
             
         }, 300 + 200 * SETTINGS.difficulty);
     }
-
-    function canMove(r1, c1, r2, c2) {
-        const p = board[r1][c1], t = board[r2][c2];
-        // --- ИСПРАВЛЕНИЕ 5: Проверка существования фигуры p ---
+    
+    // ВАЖНО: Добавлен аргумент b = board
+    function canMove(r1, c1, r2, c2, b = board) {
+        const p = b[r1][c1], t = b[r2][c2];
         if (!p) return false; 
         
         if (t && t.color === p.color) return false;
@@ -680,17 +685,18 @@
         if (p.type === 'p') {
             const dir = p.color==='w' ? -1 : 1, start = p.color==='w' ? 6 : 1;
             if (dc===0 && dr===dir && !t) valid=true;
-            if (dc===0 && dr===dir*2 && r1===start && !t && !board[r1+dir][c1]) valid=true;
+            if (dc===0 && dr===dir*2 && r1===start && !t && !b[r1+dir][c1]) valid=true;
             if (Math.abs(dc)===1 && dr===dir && t) valid=true;
         } 
         else if (p.type === 'n') valid = absDr*absDc === 2;
         else if (p.type === 'k') {
             valid = Math.max(absDr, absDc) === 1;
-            if (dr===0 && absDc===2 && !p.moved && !isCheck(p.color, board)) {
-                 const rookC = dc > 0 ? 7 : 0, rook = board[r1][rookC];
-                 if(rook && !rook.moved && isPathClear(r1, c1, r1, rookC)) {
+            if (dr===0 && absDc===2 && !p.moved && !isCheck(p.color, b)) {
+                 const rookC = dc > 0 ? 7 : 0, rook = b[r1][rookC];
+                 if(rook && !rook.moved && isPathClear(r1, c1, r1, rookC, b)) {
                      const step = dc > 0 ? 1 : -1;
-                     if (!isSquareAttacked(r1, c1+step, p.color) && !isSquareAttacked(r1, c1+step*2, p.color)) valid = true;
+                     // Передаем b в проверку атаки полей рокировки
+                     if (!isSquareAttacked(r1, c1+step, p.color, b) && !isSquareAttacked(r1, c1+step*2, p.color, b)) valid = true;
                  }
             }
         }
@@ -698,17 +704,18 @@
             if (p.type==='r' && dr*dc !== 0) return false;
             if (p.type==='b' && absDr!==absDc) return false;
             if (p.type==='q' && dr*dc!==0 && absDr!==absDc) return false;
-            valid = isPathClear(r1, c1, r2, c2);
+            valid = isPathClear(r1, c1, r2, c2, b);
         }
         if (!valid) return false;
-        const temp = board.map(r => r.map(c => c ? {...c} : null));
+        // Используем переданную доску b для создания копии
+        const temp = b.map(r => r.map(c => c ? {...c} : null));
         temp[r2][c2] = temp[r1][c1]; temp[r1][c1] = null;
         return !isCheck(p.color, temp);
     }
-    function isPathClear(r1, c1, r2, c2) {
+    function isPathClear(r1, c1, r2, c2, b = board) {
         const sr = Math.sign(r2-r1), sc = Math.sign(c2-c1);
         let r = r1+sr, c = c1+sc;
-        while(r!==r2 || c!==c2) { if (board[r][c]) return false; r+=sr; c+=sc; }
+        while(r!==r2 || c!==c2) { if (b[r][c]) return false; r+=sr; c+=sc; }
         return true;
     }
     function isCheck(c, b) { 
@@ -728,7 +735,7 @@
                 else {
                     const dr=r-i, dc=c-j, adr=Math.abs(dr), adc=Math.abs(dc);
                     let geo = (p.type==='n' && adr*adc===2) || (p.type==='r' && dr*dc===0) || (p.type==='b' && adr===adc) || (p.type==='q' && (dr*dc===0 || adr===adc));
-                    if(geo && isPathClear(i,j,r,c)) return true;
+                    if(geo && isPathClear(i,j,r,c,b)) return true; // Передаем b
                 }
             }
         }
