@@ -84,6 +84,8 @@
             padding: 10px;
             width: 100%;
             max-width: 1200px;
+            padding-top: 10px; /* Отступ сверху */
+            padding-bottom: 20px; /* Отступ снизу */
         }
 
         /* --- КОНТЕЙНЕР ДОСКИ --- */
@@ -214,11 +216,12 @@
 
         /* --- БОКОВАЯ ПАНЕЛЬ --- */
         .sidebar {
-            width: 100%; max-width: 320px;
+            width: 100%; max-width: 350px;
             background: var(--panel-bg); padding: 20px; border-radius: 12px;
             display: flex; flex-direction: column; gap: 15px;
             backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05);
             transition: opacity 0.3s;
+            flex-shrink: 0; /* Чтобы боковая панель не сжималась */
         }
         .sidebar.hidden { display: none; }
 
@@ -226,16 +229,53 @@
         .timer-box {
             flex: 1; background: rgba(0,0,0,0.3); padding: 10px;
             border-radius: 6px; text-align: center; border-bottom: 3px solid transparent;
+            /* Фиксированная высота для таймера */
+            min-height: 70px; 
+            display: flex; flex-direction: column; justify-content: center;
         }
         .timer-box.active { background: rgba(255,255,255,0.1); border-bottom-color: var(--accent); }
         .timer-time { font-family: monospace; font-size: 1.8rem; font-weight: bold; }
         .timer-label { font-size: 0.8rem; opacity: 0.6; text-transform: uppercase; }
-        .status-bar { text-align: center; font-weight: bold; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; }
-        .graveyard { min-height: 28px; background: rgba(0,0,0,0.2); border-radius: 4px; padding: 4px; display: flex; flex-wrap: wrap; gap: 2px; }
+        /* СТАБИЛИЗАЦИЯ: Фиксированная высота для статуса */
+        .status-bar { 
+            text-align: center; font-weight: bold; padding: 0 10px; 
+            background: rgba(255,255,255,0.05); border-radius: 6px;
+            height: 40px; 
+            display: flex; align-items: center; justify-content: center;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        /* СТАБИЛИЗАЦИЯ: Фиксированная высота для срубленных фигур */
+        .graveyard-container {
+            display: flex; flex-direction: column; gap: 5px;
+            background: rgba(0,0,0,0.2); border-radius: 6px; padding: 6px;
+        }
+        .graveyard { 
+            height: 28px; /* Фиксированная высота строки */
+            display: flex; flex-wrap: nowrap; gap: 1px; overflow: hidden;
+            align-items: center;
+        }
         .graveyard img { width: 20px; opacity: 0.8; display: block; }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .btn { background: #444; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .btn-primary { background: var(--accent); grid-column: span 2; }
+        
+        .controls { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; /* 2 колонки по умолчанию */
+            gap: 10px; 
+        }
+        .btn { 
+            background: #444; color: white; border: none; 
+            padding: 10px 8px; /* Компактнее */
+            border-radius: 6px; font-weight: bold; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; 
+            font-size: 0.9rem;
+            width: 100%;
+            height: 48px; /* Фиксированная высота кнопок */
+            white-space: nowrap;
+        }
+        .btn-primary { 
+            background: var(--accent); 
+            grid-column: span 2; /* Главная кнопка на всю ширину */
+        }
+        .btn:active { transform: scale(0.98); }
 
         /* Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: none; align-items: center; justify-content: center; }
@@ -254,11 +294,12 @@
 
         /* Media Queries */
         @media (min-width: 950px) { .main-container { flex-direction: row; } .sidebar { margin-top: 0; } }
-        @media (max-width: 500px) {
-            :root { --board-padding: 15px; } /* Чуть меньше отступ на мобильных */
-            .sidebar { margin-bottom: 40px; }
-            .controls { grid-template-columns: 1fr; }
-            .btn-primary, .controls button:last-child { grid-column: span 1 !important; }
+        @media (max-width: 600px) {
+            :root { 
+                --board-padding: 10px; 
+                --board-size: min(94vw, 55vh); 
+            }
+            .sidebar { margin-bottom: 20px; padding: 10px; }
         }
     </style>
 </head>
@@ -283,17 +324,17 @@
             <div id="timerB" class="timer-box"><div class="timer-label">Черные</div><div class="timer-time" id="timeDisplayB">10:00</div></div>
         </div>
         <div id="status" class="status-bar">Ход белых</div>
-        <div style="display:flex; flex-direction:column; gap:5px;">
+        <div class="graveyard-container">
             <div id="graveyard-w" class="graveyard"></div>
             <div id="graveyard-b" class="graveyard"></div>
         </div>
         <div class="controls">
             <button class="btn btn-primary" onclick="initGame()">Новая игра</button>
             <button class="btn" id="modeBtn" onclick="toggleMode()" style="grid-column: span 2;">👤 Противник: Человек</button>
+            <button class="btn" onclick="toggleFullscreen()">📺 Экран</button>
             <button class="btn" id="undoBtn" onclick="undoMove()" disabled>↩ Назад</button>
             <button class="btn" onclick="openSettings()">⚙ Настройки</button>
-            <button class="btn" onclick="toggleFullscreen()" style="grid-column: span 2;">📺 Во весь экран</button>
-            <button class="btn" onclick="toggleSidebar()" style="grid-column: span 2;">&#10006; Скрыть</button> 
+            <button class="btn" onclick="toggleSidebar()">✖ Скрыть</button>
         </div>
     </div>
 </div>
