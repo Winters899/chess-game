@@ -376,8 +376,7 @@
     let board = [], turn = 'w', selected = null, gameOver = false, lastMove = null, history = [];
     let times = { w: 600, b: 600 }, timerInterval = null, timeConfig = { active: true, start: 10, inc: 0 };
         
-    // Переменная таймера ИИ (Добавлено для фикса)
-    let aiTimer = null;
+    let aiTimer = null; // фикс зависаний ИИ
     
 
     const SETTINGS = { theme: 'classic', hints: true, coords: true, sound: true, autoRotate: false, opponent: 'human', difficulty: 1 };
@@ -403,9 +402,7 @@
     }
 
     function initGame() {
-        // СБРОС ИИ ПРИ НОВОЙ ИГРЕ
         if (aiTimer) clearTimeout(aiTimer);
-        
         gameOver = false; turn = 'w'; selected = null; lastMove = null; history = [];
         undoBtn.disabled = true;
         createBoardArray(); 
@@ -438,33 +435,24 @@
     }
 
     function drawBoard() {
-        // ИСПРАВЛЕНИЕ МЕРЦАНИЯ:
-        // 1. Создаем клетки один раз, если их нет
         if (boardEl.children.length !== 64) {
             boardEl.innerHTML = '';
-            for (let i = 0; i < 64; i++) {
-                const sq = document.createElement('div');
-                boardEl.appendChild(sq);
-            }
+            for (let i = 0; i < 64; i++) boardEl.appendChild(document.createElement('div'));
         }
 
         try {
-        
             const inCheck = isCheck(turn, board);
             for (let r=0; r<8; r++) {
                 for (let c=0; c<8; c++) {
-                    // 2. Вместо создания новых div, берем существующие
                     const index = r * 8 + c;
                     const sq = boardEl.children[index];
                     const p = board[r][c];
                     
-                    // Сбрасываем и обновляем классы
                     let cls = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
                     if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) cls += ' last-move';
                     if (selected && selected.r===r && selected.c===c) cls += ' selected';
                     if (p && p.type === 'k' && p.color === turn && inCheck) cls += ' in-check';
                     
-                    // Логика кликов и подсказок
                     if (selected && canMove(selected.r, selected.c, r, c)) {
                         cls += (p ? ' hint-ring' : ' hint-dot');
                         sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
@@ -473,7 +461,6 @@
                     }
                     sq.className = cls;
 
-                    // 3. Умное обновление картинки (Smart DOM update)
                     let img = sq.querySelector('.piece');
                     if (p) {
                         const src = PIECES[p.color][p.type];
@@ -482,7 +469,6 @@
                             img.className = 'piece';
                             sq.appendChild(img);
                         }
-                        // Меняем src только если он реально изменился (убирает микро-мигание)
                         if (img.getAttribute('src') !== src) img.src = src;
                     } else {
                         if (img) img.remove();
@@ -492,10 +478,6 @@
             boardEl.className = SETTINGS.hints ? '' : 'no-hints';
             if(SETTINGS.autoRotate && turn === 'b' && !gameOver) boardEl.classList.add('rotated');
             else boardEl.classList.remove('rotated');
-            } catch (e) {
-            console.error("Ошибка отрисовки:", e);
-            boardEl.innerHTML = '<div style="color:white;text-align:center;">Ошибка отображения. Попробуйте обновить страницу.</div>';
-        }
         } catch (e) {
             console.error("Ошибка отрисовки:", e);
         }
@@ -532,7 +514,6 @@
 
     function selectSquare(r, c) {
             if (gameOver) return;
-            // 1. Блокировка UI: запрещаем кликать, если сейчас ход компьютера
             if (SETTINGS.opponent === 'ai' && turn === 'b') return;
 
             const p = board[r][c];
@@ -553,22 +534,12 @@
         }
 
     function makeMove(toR, toC) {
-        if (!selected) return; // Защита
+        if (!selected) return;
         
         const fromR = selected.r, fromC = selected.c;
         const p = board[fromR][fromC];
 
-            // Защита от несуществующей фигуры
         if (!p) {
-            selected = null;
-            drawBoard();
-            return;
-        }
-        
-        // --- ИСПРАВЛЕНИЕ 3: Критическая защита от краша ---
-        // Если фигуры нет (например, из-за рассинхрона), выходим, не ломая игру.
-        if (!p) {
-            console.warn("Попытка хода несуществующей фигурой");
             selected = null;
             drawBoard();
             return;
@@ -621,27 +592,22 @@
     function undoMove() {
         if (!history.length) return;
         
-        // Отмена ИИ таймера
         if (aiTimer) clearTimeout(aiTimer);
         
         const performUndo = () => {
-        // При отмене хода тоже нужно сбрасывать таймер ИИ, чтобы он не походил на старой доске
-        if (aiTimer) clearTimeout(aiTimer);
-        
-        const state = JSON.parse(history.pop());
-        board = state.board; turn = state.turn; lastMove = state.lastMove; times = state.times; gameOver = false;
+            if (aiTimer) clearTimeout(aiTimer);
+            const state = JSON.parse(history.pop());
+            board = state.board; turn = state.turn; lastMove = state.lastMove; times = state.times; gameOver = false;
         };
 
         performUndo();
 
-        // Если играем с ИИ и после отмены ход стал у черных (ИИ), отменяем еще раз
         if (SETTINGS.opponent === 'ai' && turn === 'b' && history.length > 0) {
             performUndo();
         }
 
         if (!history.length) undoBtn.disabled = true;
         selected = null; rebuildGraveyard(); drawBoard(); updateStatus(); applyVisualSettings(); updateTimerDisplay();
-     
     }
 
     function pushHistory() {
@@ -755,12 +721,9 @@
     }
     
     function makeAIMove() {
-
         updateStatus("ИИ думает...");
         
-        // --- ИСПРАВЛЕНИЕ 4: Используем переменную aiTimer ---
         aiTimer = setTimeout(() => {
-            // ВАЖНО: Если ход сменился (нажали назад) или игра закончилась - стоп
             if(gameOver || turn !== 'b') return;
 
             try {
@@ -782,7 +745,6 @@
         }, 300 + 200 * SETTINGS.difficulty);
     }
     
-    // ВАЖНО: Добавлен аргумент b = board
     function canMove(r1, c1, r2, c2, b = board) {
         const p = b[r1][c1], t = b[r2][c2];
         if (!p) return false; 
@@ -829,12 +791,10 @@
         return !isCheck(p.color, temp);
     }
     function isPathClear(r1, c1, r2, c2, b = board) {
-            // Защита от NaN (которая вешала браузер)
         if (isNaN(r1) || isNaN(c1) || isNaN(r2) || isNaN(c2)) return false;
 
         const sr = Math.sign(r2-r1), sc = Math.sign(c2-c1);
         let r = r1+sr, c = c1+sc;
-        // Защита от бесконечного цикла, если координаты некорректны
         let safeCounter = 0;
         while((r!==r2 || c!==c2) && safeCounter < 10) { 
             if (r < 0 || r > 7 || c < 0 || c > 7) return false;
@@ -847,7 +807,6 @@
     function isCheck(c, b) { 
         let kr, kc; 
         b.forEach((row, r) => row.forEach((p, col) => { if(p?.type==='k' && p.color===c) { kr=r; kc=col; } })); 
-        // Если король исчез из-за бага, возвращаем false, чтобы не крашить игру
         if (kr === undefined || kc === undefined) return false;
         return isSquareAttacked(kr, kc, c, b); 
     }
