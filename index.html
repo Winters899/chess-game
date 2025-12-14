@@ -576,6 +576,7 @@
             if (isMate(turn)) { endGame(`Мат! Победа ${turn==='w'?'Черных':'Белых'}`); moveSound = 'capture'; }
             else statusEl.innerText = "ШАХ!";
         } else if (isStalemate(turn)) endGame("Пат. Ничья.");
+            else if (isInsufficientMaterial()) endGame("Ничья. Недостаточно фигур.");
         else updateStatus();
 
         playSound(moveSound);
@@ -836,7 +837,18 @@
         }
         return false;
     }
-    function isMate(c) { for(let r=0;r<8;r++) for(let col=0;col<8;col++) if(board[r][col]?.color===c) for(let tr=0;tr<8;tr++) for(let tc=0;tc<8;tc++) if(canMove(r,col,tr,tc)) return false; return true; }
+    function isMate(c) { 
+        return getValidMoves(board, c).length === 0; 
+    }
+    function isInsufficientMaterial() {
+        const pieces = board.flat().filter(p => p);
+        if (pieces.length === 2) return true; // Только короли (K vs K)
+        if (pieces.length === 3) {
+            const minors = pieces.filter(p => p.type === 'n' || p.type === 'b');
+            return minors.length === 1; // K+N vs K или K+B vs K
+        }
+        return false;
+    }
     function isStalemate(c) { return !isCheck(c, board) && isMate(c); }
 
     function toggleSidebar() { sidebarEl.classList.toggle('hidden'); if(sidebarEl.classList.contains('hidden')){ toggleSidebarBtn.innerHTML='&#9776;'; toggleSidebarBtn.style.right='5px'; } else { toggleSidebarBtn.innerHTML=''; toggleSidebarBtn.style.right='5px'; } }
