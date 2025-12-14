@@ -445,8 +445,6 @@
                     
                     if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) sq.classList.add('last-move');
                     if (selected && selected.r===r && selected.c===c) sq.classList.add('selected');
-
-                    const p = board[r][c];
                     const p = board[r] ? board[r][c] : null;
                     if (p) {
                         const img = document.createElement('img'); img.className = 'piece';
