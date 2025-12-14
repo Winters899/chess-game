@@ -438,33 +438,55 @@
     }
 
     function drawBoard() {
-        boardEl.innerHTML = '';
-            // ВАЖНО: Обернули отрисовку в try-catch, чтобы не получать черный экран при ошибке
+        // ИСПРАВЛЕНИЕ МЕРЦАНИЯ:
+        // 1. Создаем клетки один раз, если их нет
+        if (boardEl.children.length !== 64) {
+            boardEl.innerHTML = '';
+            for (let i = 0; i < 64; i++) {
+                const sq = document.createElement('div');
+                boardEl.appendChild(sq);
+            }
+        }
+
         try {
-        // Добавляем try-catch, чтобы если отрисовка сломалась, мы увидели ошибку в консоли, а не просто черный экран
-        try {
+        
             const inCheck = isCheck(turn, board);
             for (let r=0; r<8; r++) {
                 for (let c=0; c<8; c++) {
-                    const sq = document.createElement('div');
-                    sq.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
-                    sq.onclick = () => selectSquare(r, c);
+                    // 2. Вместо создания новых div, берем существующие
+                    const index = r * 8 + c;
+                    const sq = boardEl.children[index];
+                    const p = board[r][c];
                     
-                    if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) sq.classList.add('last-move');
-                    if (selected && selected.r===r && selected.c===c) sq.classList.add('selected');
-                    const p = board[r] ? board[r][c] : null;
-                    if (p) {
-                        const img = document.createElement('img'); img.className = 'piece';
-                        img.src = PIECES[p.color][p.type]; sq.appendChild(img);
-                        if (p.type === 'k' && p.color === turn && inCheck) sq.classList.add('in-check');
-                    }
+                    // Сбрасываем и обновляем классы
+                    let cls = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
+                    if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) cls += ' last-move';
+                    if (selected && selected.r===r && selected.c===c) cls += ' selected';
+                    if (p && p.type === 'k' && p.color === turn && inCheck) cls += ' in-check';
                     
-                    // Здесь была потенциальная опасность, если canMove упадет
+                    // Логика кликов и подсказок
                     if (selected && canMove(selected.r, selected.c, r, c)) {
-                        sq.classList.add(p ? 'hint-ring' : 'hint-dot');
+                        cls += (p ? ' hint-ring' : ' hint-dot');
                         sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
+                    } else {
+                        sq.onclick = () => selectSquare(r, c);
                     }
-                    boardEl.appendChild(sq);
+                    sq.className = cls;
+
+                    // 3. Умное обновление картинки (Smart DOM update)
+                    let img = sq.querySelector('.piece');
+                    if (p) {
+                        const src = PIECES[p.color][p.type];
+                        if (!img) {
+                            img = document.createElement('img');
+                            img.className = 'piece';
+                            sq.appendChild(img);
+                        }
+                        // Меняем src только если он реально изменился (убирает микро-мигание)
+                        if (img.getAttribute('src') !== src) img.src = src;
+                    } else {
+                        if (img) img.remove();
+                    }
                 }
             }
             boardEl.className = SETTINGS.hints ? '' : 'no-hints';
