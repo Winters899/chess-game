@@ -372,9 +372,10 @@
     
     let board = [], turn = 'w', selected = null, gameOver = false, lastMove = null, history = [];
     let times = { w: 600, b: 600 }, timerInterval = null, timeConfig = { active: true, start: 10, inc: 0 };
+        
+    // Переменная таймера ИИ (Добавлено для фикса)
+    let aiTimer = null;
     
-    // --- ИСПРАВЛЕНИЕ 1: Переменная для таймера ИИ ---
-    let aiTimer = null; 
 
     const SETTINGS = { theme: 'classic', hints: true, coords: true, sound: true, autoRotate: false, opponent: 'human', difficulty: 1 };
     const THEMES = {
@@ -392,6 +393,9 @@
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     function initGame() {
+                // СБРОС ИИ ПРИ НОВОЙ ИГРЕ (Фикс "Ошибки ИИ" при перезапуске)
+        if (aiTimer) clearTimeout(aiTimer);
+
         // --- ИСПРАВЛЕНИЕ 2: Сброс таймера ИИ при старте ---
         if (aiTimer) clearTimeout(aiTimer);
         
@@ -428,6 +432,8 @@
 
     function drawBoard() {
         boardEl.innerHTML = '';
+            // ВАЖНО: Обернули отрисовку в try-catch, чтобы не получать черный экран при ошибке
+        try {
         // Добавляем try-catch, чтобы если отрисовка сломалась, мы увидели ошибку в консоли, а не просто черный экран
         try {
             const inCheck = isCheck(turn, board);
@@ -441,6 +447,7 @@
                     if (selected && selected.r===r && selected.c===c) sq.classList.add('selected');
 
                     const p = board[r][c];
+                    const p = board[r] ? board[r][c] : null;
                     if (p) {
                         const img = document.createElement('img'); img.className = 'piece';
                         img.src = PIECES[p.color][p.type]; sq.appendChild(img);
@@ -458,6 +465,10 @@
             boardEl.className = SETTINGS.hints ? '' : 'no-hints';
             if(SETTINGS.autoRotate && turn === 'b' && !gameOver) boardEl.classList.add('rotated');
             else boardEl.classList.remove('rotated');
+            } catch (e) {
+            console.error("Ошибка отрисовки:", e);
+            boardEl.innerHTML = '<div style="color:white;text-align:center;">Ошибка отображения. Попробуйте обновить страницу.</div>';
+        }
         } catch (e) {
             console.error("Ошибка отрисовки:", e);
         }
@@ -519,6 +530,13 @@
         
         const fromR = selected.r, fromC = selected.c;
         const p = board[fromR][fromC];
+
+            // Защита от несуществующей фигуры
+        if (!p) {
+            selected = null;
+            drawBoard();
+            return;
+        }
         
         // --- ИСПРАВЛЕНИЕ 3: Критическая защита от краша ---
         // Если фигуры нет (например, из-за рассинхрона), выходим, не ломая игру.
@@ -568,13 +586,28 @@
 
     function undoMove() {
         if (!history.length) return;
+        
+        // Отмена ИИ таймера
+        if (aiTimer) clearTimeout(aiTimer);
+        
+        const performUndo = () => {
         // При отмене хода тоже нужно сбрасывать таймер ИИ, чтобы он не походил на старой доске
         if (aiTimer) clearTimeout(aiTimer);
         
         const state = JSON.parse(history.pop());
         board = state.board; turn = state.turn; lastMove = state.lastMove; times = state.times; gameOver = false;
+        };
+
+        performUndo();
+
+        // Если играем с ИИ и после отмены ход стал у черных (ИИ), отменяем еще раз
+        if (SETTINGS.opponent === 'ai' && turn === 'b' && history.length > 0) {
+            performUndo();
+        }
+
         if (!history.length) undoBtn.disabled = true;
         selected = null; rebuildGraveyard(); drawBoard(); updateStatus(); applyVisualSettings(); updateTimerDisplay();
+     
     }
 
     function pushHistory() {
@@ -693,8 +726,8 @@
         
         // --- ИСПРАВЛЕНИЕ 4: Используем переменную aiTimer ---
         aiTimer = setTimeout(() => {
-            // Если игра уже закончилась пока ИИ думал - ничего не делаем
-            if(gameOver) return;
+            // ВАЖНО: Если ход сменился (нажали назад) или игра закончилась - стоп
+            if(gameOver || turn !== 'b') return;
 
             try {
                 const move = findBestMove(SETTINGS.difficulty);
@@ -754,16 +787,26 @@
         return !isCheck(p.color, temp);
     }
     function isPathClear(r1, c1, r2, c2, b = board) {
+            // Защита от NaN (которая вешала браузер)
+        if (isNaN(r1) || isNaN(c1) || isNaN(r2) || isNaN(c2)) return false;
+
         const sr = Math.sign(r2-r1), sc = Math.sign(c2-c1);
         let r = r1+sr, c = c1+sc;
-        while(r!==r2 || c!==c2) { if (b[r][c]) return false; r+=sr; c+=sc; }
+        // Защита от бесконечного цикла, если координаты некорректны
+        let safeCounter = 0;
+        while((r!==r2 || c!==c2) && safeCounter < 10) { 
+            if (r < 0 || r > 7 || c < 0 || c > 7) return false;
+            if (b[r][c]) return false; 
+            r+=sr; c+=sc; 
+            safeCounter++;
+        }
         return true;
     }
     function isCheck(c, b) { 
         let kr, kc; 
         b.forEach((row, r) => row.forEach((p, col) => { if(p?.type==='k' && p.color===c) { kr=r; kc=col; } })); 
-        // --- ИСПРАВЛЕНИЕ 6: Защита, если король не найден (например при баге) ---
-        if (kr === undefined) return false; 
+        // Если король исчез из-за бага, возвращаем false, чтобы не крашить игру
+        if (kr === undefined || kc === undefined) return false;
         return isSquareAttacked(kr, kc, c, b); 
     }
     function isSquareAttacked(r, c, color, b) {
