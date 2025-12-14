@@ -329,7 +329,7 @@
             <div id="graveyard-b" class="graveyard"></div>
         </div>
         <div class="controls">
-            <button class="btn btn-primary" onclick="initGame()">Новая игра</button>
+            <button class="btn btn-primary" onclick="confirmInitGame()">Новая игра</button>
             <button class="btn" id="modeBtn" onclick="toggleMode()" style="grid-column: span 2;">👤 Противник: Человек</button>
             <button class="btn" onclick="toggleFullscreen()">📺 Экран</button>
             <button class="btn" id="undoBtn" onclick="undoMove()" disabled>↩ Назад</button>
@@ -391,12 +391,16 @@
     };
     const START_COUNTS = { w: {p:8,n:2,b:2,r:2,q:1}, b: {p:8,n:2,b:2,r:2,q:1} };
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function confirmInitGame() {
+        if (!gameOver && history.length > 0) {
+            if (confirm("Текущая игра будет сброшена. Начать новую?")) initGame();
+        } else {
+            initGame();
+        }
+    }
 
     function initGame() {
-                // СБРОС ИИ ПРИ НОВОЙ ИГРЕ (Фикс "Ошибки ИИ" при перезапуске)
-        if (aiTimer) clearTimeout(aiTimer);
-
-        // --- ИСПРАВЛЕНИЕ 2: Сброс таймера ИИ при старте ---
+        // СБРОС ИИ ПРИ НОВОЙ ИГРЕ
         if (aiTimer) clearTimeout(aiTimer);
         
         gameOver = false; turn = 'w'; selected = null; lastMove = null; history = [];
@@ -548,6 +552,7 @@
         pushHistory();
         const target = board[toR][toC];
         let moveSound = target ? 'capture' : 'move';
+        
         // Взятие на проходе (En Passant)
         if (p.type === 'p' && toC !== fromC && !target) {
             board[fromR][toC] = null;
@@ -725,7 +730,7 @@
     }
     
     function makeAIMove() {
-        stopTimer(); 
+
         updateStatus("ИИ думает...");
         
         // --- ИСПРАВЛЕНИЕ 4: Используем переменную aiTimer ---
@@ -747,7 +752,7 @@
                 statusEl.innerText = "Ошибка ИИ";
             }
             
-            if (!gameOver && timeConfig.active) startTimer();
+
             
         }, 300 + 200 * SETTINGS.difficulty);
     }
