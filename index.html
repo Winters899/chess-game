@@ -194,7 +194,10 @@
         .no-hints .hint-dot::after, .no-hints .hint-ring::after { display: none; }
 
         /* --- FULLSCREEN --- */
-        #boardContainer:fullscreen {
+        /* Добавлен класс .ios-fullscreen для поддержки iPhone/iPad */
+        #boardContainer:fullscreen, #boardContainer.ios-fullscreen {
+            position: fixed !important; /* Важно для iOS */
+            top: 0; left: 0; z-index: 9999; /* Поверх всего */
             width: 100vw;
             height: 100vh;
             background: #0a0a0a;
@@ -204,14 +207,14 @@
             justify-content: center;
         }
         
-        #boardContainer:fullscreen .game-area {
+        #boardContainer:fullscreen .game-area, #boardContainer.ios-fullscreen .game-area {
             /* В полноэкранном режиме доска занимает максимум, минус место под координаты */
             --board-size: min(90vmin, 90vmax); 
             /* Восстанавливаем паддинг визуально через margin или просто центрирование */
             margin: var(--board-padding);
         }
         
-        #boardContainer:fullscreen .sidebar-toggle-btn { display: none; }
+        #boardContainer:fullscreen .sidebar-toggle-btn, #boardContainer.ios-fullscreen .sidebar-toggle-btn { display: none; }
 
 
         /* --- БОКОВАЯ ПАНЕЛЬ --- */
@@ -860,8 +863,24 @@
     
     function toggleFullscreen() {
         const el = document.getElementById('boardContainer');
-        if(!document.fullscreenElement) { (el.requestFullscreen||el.webkitRequestFullscreen).call(el); }
-        else { (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
+        
+        // Проверка: является ли устройство iOS (iPhone, iPad, iPod)
+        // Включая новые iPad, которые представляются как Mac (MacIntel + TouchPoints)
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        if (isIOS) {
+            // Для iOS просто переключаем CSS-класс
+            el.classList.toggle('ios-fullscreen');
+            // Пересчитываем координаты (сетку), так как размер доски изменился
+            setTimeout(generateCoords, 100);
+        } else {
+            // Для Android и ПК используем стандартный API
+            if(!document.fullscreenElement && !document.webkitFullscreenElement) { 
+                (el.requestFullscreen||el.webkitRequestFullscreen).call(el); 
+            } else { 
+                (document.exitFullscreen||document.webkitExitFullscreen).call(document); 
+            }
+        }
     }
 
     function startTimer() { if(timerInterval) clearInterval(timerInterval); timerInterval = setInterval(() => { if(gameOver) return; times[turn]--; updateTimerDisplay(); if(times[turn]<=0) endGame(`Время вышло!`); }, 1000); }
