@@ -550,6 +550,11 @@
         pushHistory();
         const target = board[toR][toC];
         let moveSound = target ? 'capture' : 'move';
+        // Взятие на проходе (En Passant)
+        if (p.type === 'p' && toC !== fromC && !target) {
+            board[fromR][toC] = null;
+            moveSound = 'capture';
+        }
 
         if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
             const isKingSide = toC > fromC;
@@ -761,6 +766,14 @@
             if (dc===0 && dr===dir && !t) valid=true;
             if (dc===0 && dr===dir*2 && r1===start && !t && !b[r1+dir][c1]) valid=true;
             if (Math.abs(dc)===1 && dr===dir && t) valid=true;
+            
+            // Логика проверки En Passant
+            if (Math.abs(dc)===1 && dr===dir && !t) {
+                if (lastMove && lastMove.tr === r1 && lastMove.tc === c2 && Math.abs(lastMove.fr - lastMove.tr) === 2) {
+                    const enemy = b[r1][c2];
+                    if (enemy && enemy.type === 'p' && enemy.color !== p.color) valid = true;
+                }
+            }
         } 
         else if (p.type === 'n') valid = absDr*absDc === 2;
         else if (p.type === 'k') {
