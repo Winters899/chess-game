@@ -193,6 +193,16 @@
         }
         .no-hints .hint-dot::after, .no-hints .hint-ring::after { display: none; }
 
+        /* --- АНИМАЦИЯ ХОДА (плавный перелёт фигуры) --- */
+        .flying-piece {
+            position: absolute;
+            pointer-events: none;
+            z-index: 1000;
+            will-change: transform;
+            transition: transform 180ms ease-in-out;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+        }
+
         /* --- FULLSCREEN --- */
         /* Добавлен класс .ios-fullscreen для поддержки iPhone/iPad */
         #boardContainer:fullscreen, #boardContainer.ios-fullscreen {
@@ -379,6 +389,77 @@
         
     let aiTimer = null; // фикс зависаний ИИ
     
+    // Анимация перемещения фигур
+    let isAnimating = false;
+    const MOVE_ANIM_MS = 180;
+
+    function getSquareEl(r, c) {
+        return boardEl.children[r * 8 + c];
+    }
+
+    function animateMovePlan(plan) {
+        if (!plan || !plan.moves || !plan.moves.length) return Promise.resolve();
+        if (isAnimating) return Promise.resolve();
+
+        isAnimating = true;
+
+        // Скрываем исходные/целевые фигуры, чтобы не было "двойника" во время перелёта
+        (plan.hide || []).forEach(({ r, c }) => {
+            const sq = getSquareEl(r, c);
+            if (!sq) return;
+            const img = sq.querySelector('img.piece');
+            if (img) img.style.visibility = 'hidden';
+        });
+
+        const containerRect = boardContainer.getBoundingClientRect();
+
+        const runOne = (m) => new Promise((resolve) => {
+            const fromSq = getSquareEl(m.fromR, m.fromC);
+            const toSq = getSquareEl(m.toR, m.toC);
+            if (!fromSq || !toSq) return resolve();
+
+            const fromRect = fromSq.getBoundingClientRect();
+            const toRect = toSq.getBoundingClientRect();
+
+            const size = Math.min(fromRect.width, fromRect.height) * 0.9;
+            const startLeft = (fromRect.left - containerRect.left) + (fromRect.width - size) / 2;
+            const startTop  = (fromRect.top  - containerRect.top)  + (fromRect.height - size) / 2;
+            const endLeft   = (toRect.left   - containerRect.left) + (toRect.width - size) / 2;
+            const endTop    = (toRect.top    - containerRect.top)  + (toRect.height - size) / 2;
+
+            const dx = endLeft - startLeft;
+            const dy = endTop - startTop;
+
+            const fly = document.createElement('img');
+            fly.className = 'flying-piece';
+            fly.src = m.src;
+            fly.style.width = size + 'px';
+            fly.style.height = size + 'px';
+            fly.style.left = startLeft + 'px';
+            fly.style.top = startTop + 'px';
+            fly.style.transform = 'translate(0px, 0px)';
+            fly.style.transitionDuration = MOVE_ANIM_MS + 'ms';
+
+            boardContainer.appendChild(fly);
+
+            requestAnimationFrame(() => {
+                fly.style.transform = `translate(${dx}px, ${dy}px)`;
+            });
+
+            const finish = () => {
+                fly.removeEventListener('transitionend', finish);
+                fly.remove();
+                resolve();
+            };
+
+            fly.addEventListener('transitionend', finish);
+            setTimeout(finish, MOVE_ANIM_MS + 80);
+        });
+
+        return Promise.all(plan.moves.map(runOne)).finally(() => {
+            isAnimating = false;
+        });
+    }
 
     // Турнирные правила (FIDE)
     let halfmoveClock = 0;              // полуходы без взятий и ходов пешкой
@@ -661,6 +742,8 @@
                             img.className = 'piece';
                             sq.appendChild(img);
                         }
+                        // Если предыдущая анимация скрыла фигуру — обязательно вернуть видимость
+                        img.style.visibility = '';
                         if (img.getAttribute('src') !== src) img.src = src;
                     } else {
                         if (img) img.remove();
@@ -724,6 +807,7 @@
 
     function selectSquare(r, c) {
             if (gameOver) return;
+            if (isAnimating) return;
             if (SETTINGS.opponent === 'ai' && turn === 'b') return;
 
             const p = board[r][c];
@@ -793,6 +877,30 @@
         
         lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
 
+        // План анимации (плавное перемещение)
+        const animPlan = {
+            moves: [ { fromR, fromC, toR, toC, src: PIECES[p.color][p.type] } ],
+            hide:  [ { r: fromR, c: fromC }, { r: toR, c: toC } ]
+        };
+
+        // En passant: снимаемая пешка находится на (fromR, toC)
+        if (p.type === 'p' && toC !== fromC && !target) {
+            animPlan.hide.push({ r: fromR, c: toC });
+        }
+
+        // Рокировка: добавляем движение ладьи (координаты до перестановки)
+        if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
+            const kingSide = toC > fromC;
+            const rookFromC = kingSide ? 7 : 0;
+            const rookToC = kingSide ? 5 : 3;
+            const rookObj = board[fromR][rookFromC];
+            if (rookObj) {
+                animPlan.moves.push({ fromR, fromC: rookFromC, toR, toC: rookToC, src: PIECES[rookObj.color][rookObj.type] });
+                animPlan.hide.push({ r: fromR, c: rookFromC });
+                animPlan.hide.push({ r: toR, c: rookToC });
+            }
+        }
+
         // Турнирные правила: 50/75 ходов
         if (isPawnMove || isCapture) halfmoveClock = 0; else halfmoveClock++;
 
@@ -824,14 +932,20 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         else updateStatus();
 
         playSound(moveSound);
-        drawBoard();
-        applyVisualSettings();
 
-        if (!gameOver && SETTINGS.opponent === 'ai' && turn === 'b') {
-            makeAIMove();
-        }
-        updateClaimButtonState();
-        saveAppState();
+        const finalizeUI = () => {
+            drawBoard();
+            applyVisualSettings();
+
+            if (!gameOver && SETTINGS.opponent === 'ai' && turn === 'b') {
+                makeAIMove();
+            }
+            updateClaimButtonState();
+            saveAppState();
+        };
+
+        // Сначала анимация, затем перерисовка позиции
+        animateMovePlan(animPlan).then(finalizeUI).catch(finalizeUI);
     }
 
     function undoMove() {
@@ -1085,7 +1199,9 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
     function isCheck(c, b) { 
         let kr, kc; 
         b.forEach((row, r) => row.forEach((p, col) => { if(p?.type==='k' && p.color===c) { kr=r; kc=col; } })); 
-        if (kr === undefined || kc === undefined) return false;
+        // Если у стороны нет короля на доске — считаем, что она \"под шахом\"
+        // Это предотвращает ложный пат после фактического мата (захвата короля).
+        if (kr === undefined || kc === undefined) return true;
         return isSquareAttacked(kr, kc, c, b); 
     }
     function isSquareAttacked(r, c, color, b) {
