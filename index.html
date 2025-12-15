@@ -375,7 +375,7 @@
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     
     let board = [], turn = 'w', selected = null, gameOver = false, lastMove = null, history = [];
-    let times = { w: 600, b: 600 }, timerInterval = null, timeConfig = { active: true, start: 10, inc: 0 };
+    let times = { w: 600, b: 600 }, timerInterval = null, timerLastTs = 0, timeConfig = { active: true, start: 10, inc: 0 };
         
     let aiTimer = null; // фикс зависаний ИИ
     
@@ -488,6 +488,73 @@
         updateClaimButtonState();
     }
 
+    
+    // ===== Сохранение и восстановление состояния (localStorage) =====
+    const LS_SETTINGS_KEY = 'chesspro_settings_v1';
+    const LS_STATE_KEY = 'chesspro_state_v1';
+
+    function saveSettings() {
+        try {
+            localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify({ SETTINGS, timeConfig }));
+        } catch (e) {}
+    }
+
+    function loadSettings() {
+        try {
+            const raw = localStorage.getItem(LS_SETTINGS_KEY);
+            if (!raw) return false;
+            const data = JSON.parse(raw);
+            if (data && data.SETTINGS) Object.assign(SETTINGS, data.SETTINGS);
+            if (data && data.timeConfig) Object.assign(timeConfig, data.timeConfig);
+            return true;
+        } catch (e) { return false; }
+    }
+
+    function saveAppState() {
+        try {
+            localStorage.setItem(LS_STATE_KEY, JSON.stringify({
+                board, turn, lastMove, history, times, timeConfig, gameOver,
+                halfmoveClock, positionStack,
+                positionCount: Array.from(positionCount.entries())
+            }));
+        } catch (e) {}
+    }
+
+    function loadAppState() {
+        try {
+            const raw = localStorage.getItem(LS_STATE_KEY);
+            if (!raw) return false;
+            const s = JSON.parse(raw);
+            if (!s || !s.board) return false;
+
+            board = s.board;
+            turn = s.turn || 'w';
+            lastMove = s.lastMove || null;
+            history = s.history || [];
+            times = s.times || { w: 600, b: 600 };
+            gameOver = !!s.gameOver;
+            halfmoveClock = s.halfmoveClock || 0;
+            positionStack = s.positionStack || [];
+            positionCount = new Map(s.positionCount || []);
+            if (s.timeConfig) Object.assign(timeConfig, s.timeConfig);
+
+            selected = null;
+            undoBtn.disabled = !history.length;
+
+            rebuildGraveyard();
+            updateStatus();
+            drawBoard();
+            applyVisualSettings();
+            updateTimerDisplay();
+            updateClaimButtonState();
+
+            stopTimer();
+            if (timeConfig.active && !gameOver) startTimer();
+
+            return true;
+        } catch (e) { return false; }
+    }
+
     function confirmInitGame() {
         if (!gameOver && history.length > 0) {
             if (confirm("Текущая игра будет сброшена. Начать новую?")) initGame();
@@ -552,30 +619,38 @@
     }
 
     function drawBoard() {
+        // 1) Создаём клетки только один раз
         if (boardEl.children.length !== 64) {
             boardEl.innerHTML = '';
-            for (let i = 0; i < 64; i++) boardEl.appendChild(document.createElement('div'));
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const sq = document.createElement('div');
+                    sq.className = 'square';
+                    sq.dataset.r = r;
+                    sq.dataset.c = c;
+                    boardEl.appendChild(sq);
+                }
+            }
         }
 
+        // 2) Отрисовку выполняем всегда
         try {
             const inCheck = isCheck(turn, board);
-            for (let r=0; r<8; r++) {
-                for (let c=0; c<8; c++) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
                     const index = r * 8 + c;
                     const sq = boardEl.children[index];
                     const p = board[r][c];
-                    
-                    let cls = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
-                    if (lastMove && ((lastMove.fr===r && lastMove.fc===c) || (lastMove.tr===r && lastMove.tc===c))) cls += ' last-move';
-                    if (selected && selected.r===r && selected.c===c) cls += ' selected';
+
+                    let cls = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                    if (lastMove && ((lastMove.fr === r && lastMove.fc === c) || (lastMove.tr === r && lastMove.tc === c))) cls += ' last-move';
+                    if (selected && selected.r === r && selected.c === c) cls += ' selected';
                     if (p && p.type === 'k' && p.color === turn && inCheck) cls += ' in-check';
-                    
-                    if (selected && canMove(selected.r, selected.c, r, c)) {
+
+                    if (selected && canMove(selected.r, selected.c, r, c, board)) {
                         cls += (p ? ' hint-ring' : ' hint-dot');
-                        sq.onclick = (e) => { e.stopPropagation(); makeMove(r, c); };
-                    } else {
-                        sq.onclick = () => selectSquare(r, c);
                     }
+
                     sq.className = cls;
 
                     let img = sq.querySelector('.piece');
@@ -592,8 +667,9 @@
                     }
                 }
             }
+
             boardEl.className = SETTINGS.hints ? '' : 'no-hints';
-            if(SETTINGS.autoRotate && turn === 'b' && !gameOver) boardEl.classList.add('rotated');
+            if (SETTINGS.autoRotate && turn === 'b' && !gameOver) boardEl.classList.add('rotated');
             else boardEl.classList.remove('rotated');
         } catch (e) {
             console.error("Ошибка отрисовки:", e);
@@ -626,6 +702,23 @@
             el.style.top = `calc(${i} * 12.5% + 6.25%)`; 
             el.style.transform = 'translateY(-50%)';
             coordsOverlay.appendChild(el);
+        }
+    }
+
+    // Делегирование событий: один обработчик на всю доску
+    boardEl.addEventListener('click', onBoardClick);
+    function onBoardClick(e) {
+        const sq = e.target.closest('.square');
+        if (!sq || gameOver) return;
+        if (SETTINGS.opponent === 'ai' && turn === 'b') return;
+
+        const r = parseInt(sq.dataset.r, 10);
+        const c = parseInt(sq.dataset.c, 10);
+
+        if (selected && canMove(selected.r, selected.c, r, c, board)) {
+            makeMove(r, c);
+        } else {
+            selectSquare(r, c);
         }
     }
 
@@ -738,6 +831,7 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
             makeAIMove();
         }
         updateClaimButtonState();
+        saveAppState();
     }
 
     function undoMove() {
@@ -957,9 +1051,21 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
             valid = isPathClear(r1, c1, r2, c2, b);
         }
         if (!valid) return false;
-        // Используем переданную доску b для создания копии
-        const temp = b.map(r => r.map(c => c ? {...c} : null));
-        temp[r2][c2] = temp[r1][c1]; temp[r1][c1] = null;
+        // Создаём временную доску с глубокой копией
+        const temp = [];
+        for (let i = 0; i < 8; i++) {
+            temp[i] = [];
+            for (let j = 0; j < 8; j++) {
+                temp[i][j] = b[i][j] ? { ...b[i][j] } : null;
+            }
+        }
+        // Делаем ход на временной доске
+        const movingPiece = temp[r1][c1];
+        if (movingPiece && movingPiece.type === 'p' && (r2 === 0 || r2 === 7)) {
+            movingPiece.type = 'q'; // Превращение в ферзя для проверки
+        }
+        temp[r2][c2] = temp[r1][c1]; 
+        temp[r1][c1] = null;
         return !isCheck(p.color, temp);
     }
     function isPathClear(r1, c1, r2, c2, b = board) {
@@ -1147,6 +1253,8 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         if (!gameOver && SETTINGS.opponent === 'ai' && turn === 'b') {
             makeAIMove();
         }
+
+        saveSettings();
     }
 
     function applyVisualSettings() {
@@ -1172,9 +1280,21 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         setTimeout(() => {
             document.getElementById('splash-screen').classList.add('hidden');
         }, 2000);
+
+        // Пытаемся восстановить состояние
+        loadSettings();
+        const restored = loadAppState();
+        
+        if (!restored) {
+            initGame();
+        }
     });
 
-    initGame();
+    // Сохранение при закрытии/минимизации вкладки
+    window.addEventListener('beforeunload', saveAppState);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) saveAppState();
+    });
 </script>
 
 </body>
