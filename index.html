@@ -920,7 +920,9 @@
 
 if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         
-        turn = turn === 'w' ? 'b' : 'w'; selected = null;
+        turn = turn === 'w' ? 'b' : 'w';
+        timerLastTs = Date.now();
+        selected = null;
         rebuildGraveyard();
 
         if (isCheck(turn, board)) {
@@ -1013,14 +1015,34 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         const p = b[r1][c1], t = b[r2][c2];
         if (!p || (t && t.color === p.color)) return false;
         if (!canMove(r1, c1, r2, c2, b)) return false; // ВАЖНО: передаем 'b'
-        
-        const temp = b.map(r => r.map(c => c ? {...c} : null)); 
-        temp[r2][c2] = temp[r1][c1]; 
+
+        // Копия доски для проверки самошаха
+        const temp = b.map(r => r.map(c => c ? { ...c } : null));
+
+        // Симуляция взятия на проходе (En Passant)
+        // Пешка идёт по диагонали в пустую клетку — значит снимается пешка на (r1, c2).
+        if (p.type === 'p' && c2 !== c1 && !t) {
+            temp[r1][c2] = null;
+        }
+
+        // Симуляция рокировки (перестановка ладьи)
+        if (p.type === 'k' && Math.abs(c2 - c1) === 2) {
+            const kingSide = c2 > c1;
+            const rookFromC = kingSide ? 7 : 0;
+            const rookToC = kingSide ? 5 : 3;
+            temp[r1][rookToC] = temp[r1][rookFromC];
+            temp[r1][rookFromC] = null;
+        }
+
+        // Основной перенос фигуры
+        temp[r2][c2] = temp[r1][c1];
         temp[r1][c1] = null;
 
+        // Симуляция превращения (для проверки шаха достаточно ферзя)
         if (p.type === 'p' && (r2 === 0 || r2 === 7)) {
             temp[r2][c2] = { color: p.color, type: 'q', symbol: p.color === 'w' ? '♕' : '♛' };
         }
+
         return !isCheck(p.color, temp);
     }
 
@@ -1130,6 +1152,8 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         if (!p) return false; 
         
         if (t && t.color === p.color) return false;
+        // Запрещаем взятие короля (короля нельзя снимать с доски)
+        if (t && t.type === 'k') return false;
         const dr = r2-r1, dc = c2-c1, absDr = Math.abs(dr), absDc = Math.abs(dc);
         let valid = false;
         if (p.type === 'p') {
@@ -1293,8 +1317,31 @@ if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         }
     }
 
-    function startTimer() { if(timerInterval) clearInterval(timerInterval); timerInterval = setInterval(() => { if(gameOver) return; times[turn]--; updateTimerDisplay(); if(times[turn]<=0) endGame(`Время вышло!`); }, 1000); }
-    function stopTimer() { clearInterval(timerInterval); }
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        if (!timeConfig.active) return;
+
+        timerLastTs = Date.now();
+        timerInterval = setInterval(() => {
+            if (gameOver || !timeConfig.active) return;
+
+            const now = Date.now();
+            const elapsed = Math.floor((now - timerLastTs) / 1000);
+            if (elapsed <= 0) return;
+
+            times[turn] -= elapsed;
+            timerLastTs += elapsed * 1000;
+
+            updateTimerDisplay();
+            if (times[turn] <= 0) {
+                endGame(turn === 'w' ? 'Время! Победа черных.' : 'Время! Победа белых.');
+            }
+        }, 250);
+    }
+    function stopTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
+    }
     function updateTimerDisplay() { const f = t => `${Math.floor(Math.max(0,t)/60).toString().padStart(2,'0')}:${(Math.max(0,t)%60).toString().padStart(2,'0')}`; document.getElementById('timeDisplayW').innerText=f(times.w); document.getElementById('timeDisplayB').innerText=f(times.b); }
     function endGame(msg) { gameOver=true; stopTimer(); statusEl.innerText=msg; statusEl.style.background="rgba(255,50,50,0.3)"; }
     function updateStatus() { if(!gameOver) { statusEl.innerText = turn==='w'?"Ход Белых":"Ход Черных"; statusEl.style.background=""; } }
