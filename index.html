@@ -337,6 +337,7 @@
             <button class="btn" onclick="toggleFullscreen()">📺 Экран</button>
             <button class="btn" id="undoBtn" onclick="undoMove()" disabled>↩ Назад</button>
             <button class="btn" onclick="openSettings()">⚙ Настройки</button>
+            <button class="btn" id="claimDrawBtn" onclick="claimDraw()" disabled>⟂ Заявить ничью</button>
             <button class="btn" onclick="toggleSidebar()">✖ Скрыть</button>
         </div>
     </div>
@@ -379,6 +380,11 @@
     let aiTimer = null; // фикс зависаний ИИ
     
 
+    // Турнирные правила (FIDE)
+    let halfmoveClock = 0;              // полуходы без взятий и ходов пешкой
+    let positionCount = new Map();      // key позиции -> сколько раз была
+    let positionStack = [];             // стек ключей позиций по ходу партии
+
     const SETTINGS = { theme: 'classic', hints: true, coords: true, sound: true, autoRotate: false, opponent: 'human', difficulty: 1 };
     const THEMES = {
         classic: { l: '#ebecd0', d: '#779556', a: '#81b64c' },
@@ -393,6 +399,95 @@
     };
     const START_COUNTS = { w: {p:8,n:2,b:2,r:2,q:1}, b: {p:8,n:2,b:2,r:2,q:1} };
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // ===== Турнирные правила: 3x/5x повторение, 50/75 ходов =====
+    function getCastlingRights(b) {
+        let rights = '';
+        const wk = b[7][4], wrA = b[7][0], wrH = b[7][7];
+        const bk = b[0][4], brA = b[0][0], brH = b[0][7];
+
+        if (wk && wk.type === 'k' && wk.color === 'w' && !wk.moved) {
+            if (wrH && wrH.type === 'r' && wrH.color === 'w' && !wrH.moved) rights += 'K';
+            if (wrA && wrA.type === 'r' && wrA.color === 'w' && !wrA.moved) rights += 'Q';
+        }
+        if (bk && bk.type === 'k' && bk.color === 'b' && !bk.moved) {
+            if (brH && brH.type === 'r' && brH.color === 'b' && !brH.moved) rights += 'k';
+            if (brA && brA.type === 'r' && brA.color === 'b' && !brA.moved) rights += 'q';
+        }
+        return rights || '-';
+    }
+
+    function getEnPassantTarget(b, lastMove) {
+        if (!lastMove) return '-';
+        const { fr, fc, tr, tc } = lastMove;
+        const p = b[tr][tc];
+        if (!p || p.type !== 'p') return '-';
+        if (Math.abs(tr - fr) !== 2) return '-';
+
+        const files = 'abcdefgh';
+        const ranks = '87654321'; // row 0 = 8, row 7 = 1
+        const epRow = (tr + fr) / 2;
+        return files[tc] + ranks[epRow];
+    }
+
+    function getPositionKey(b, turnSide, lastMv) {
+        let key = '';
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = b[r][c];
+                key += p ? (p.color + p.type) : '.';
+            }
+        }
+        key += ' ' + turnSide;
+        key += ' ' + getCastlingRights(b);
+        key += ' ' + getEnPassantTarget(b, lastMv);
+        return key;
+    }
+
+    function canClaimDraw() {
+        const key = getPositionKey(board, turn, lastMove);
+        const repeats = positionCount.get(key) || 0;
+        return repeats >= 3 || halfmoveClock >= 100;
+    }
+
+    function updateClaimButtonState() {
+        const btn = document.getElementById('claimDrawBtn');
+        if (!btn) return;
+        btn.disabled = !canClaimDraw();
+        btn.title = btn.disabled ? 'Недоступно: повторений < 3 и < 50 ходов' : '';
+    }
+
+    function claimDraw() {
+        if (!canClaimDraw() || gameOver) return;
+        const key = getPositionKey(board, turn, lastMove);
+        const repeats = positionCount.get(key) || 0;
+        if (repeats >= 3) {
+            endGame('Ничья по заявлению: трёхкратное повторение');
+        } else if (halfmoveClock >= 100) {
+            endGame('Ничья по заявлению: правило 50 ходов');
+        }
+    }
+
+    function updatePositionHistory() {
+        const key = getPositionKey(board, turn, lastMove);
+        positionStack.push(key);
+        const now = (positionCount.get(key) || 0) + 1;
+        positionCount.set(key, now);
+
+        // 5-кратное повторение — авто-ничья
+        if (!gameOver && now >= 5) {
+            endGame('Ничья: пятикратное повторение позиции');
+            return;
+        }
+
+        // 3-кратное повторение — ничья по заявлению
+        if (!gameOver && now >= 3) {
+            statusEl.innerText = 'Трёхкратное повторение: можно заявить ничью';
+        }
+
+        updateClaimButtonState();
+    }
+
     function confirmInitGame() {
         if (!gameOver && history.length > 0) {
             if (confirm("Текущая игра будет сброшена. Начать новую?")) initGame();
@@ -403,19 +498,41 @@
 
     function initGame() {
         if (aiTimer) clearTimeout(aiTimer);
-        gameOver = false; turn = 'w'; selected = null; lastMove = null; history = [];
-        undoBtn.disabled = true;
-        createBoardArray(); 
-        if(timeConfig.active) { times.w = times.b = timeConfig.start * 60; updateTimerDisplay(); startTimer(); }
-        else stopTimer();
-        
+        gameOver = false;
+        turn = 'w';
+        selected = null;
+        lastMove = null;
+        history = [];
+        halfmoveClock = 0;
+        positionCount = new Map();
+        positionStack = [];
+
+        createBoardArray();
+
+        if (timeConfig.active) {
+            times.w = timeConfig.start * 60;
+            times.b = timeConfig.start * 60;
+            updateTimerDisplay();
+            startTimer();
+        } else {
+            stopTimer();
+        }
+
         rebuildGraveyard();
-        if (sidebarEl.classList.contains('hidden')) { toggleSidebarBtn.style.right = '5px'; toggleSidebarBtn.innerHTML = '&#9776;'; }
-        
+
+        if (sidebarEl.classList.contains('hidden')) {
+            toggleSidebarBtn.style.right = '5px';
+            toggleSidebarBtn.innerHTML = '☰';
+        }
+
+        // Стартовая позиция
+        updatePositionHistory();
+
         updateStatus();
-        drawBoard(); 
-        applyVisualSettings(); 
-        
+        drawBoard();
+        applyVisualSettings();
+        updateClaimButtonState();
+
         window.addEventListener('resize', generateCoords);
 
         if (SETTINGS.opponent === 'ai' && turn === 'b') {
@@ -547,12 +664,16 @@
 
         pushHistory();
         const target = board[toR][toC];
+        const isPawnMove = p.type === 'p';
+        let isCapture = !!target;
+
         let moveSound = target ? 'capture' : 'move';
         
         // Взятие на проходе (En Passant)
         if (p.type === 'p' && toC !== fromC && !target) {
             board[fromR][toC] = null;
             moveSound = 'capture';
+            isCapture = true;
         }
 
         if (p.type === 'k' && Math.abs(toC - fromC) === 2) {
@@ -565,6 +686,23 @@
 
         board[toR][toC] = p; board[fromR][fromC] = null; p.moved = true;
         if (p.type === 'p' && (toR === 0 || toR === 7)) { p.type = 'q'; moveSound = 'check'; }
+
+        // Турнирные правила: 50/75 ходов
+        if (isPawnMove || isCapture) halfmoveClock = 0; else halfmoveClock++;
+
+        // Турнирные правила: 3x/5x повторение
+        updatePositionHistory();
+
+        // 75 полуходов — автоматическая ничья
+        if (!gameOver && halfmoveClock >= 150) {
+            endGame('Ничья: правило 75 ходов (без взятий и ходов пешкой)');
+        }
+
+        // 50 полуходов — ничья по заявлению
+        if (!gameOver && halfmoveClock >= 100) {
+            statusEl.innerText = 'Правило 50 ходов: можно заявить ничью';
+            updateClaimButtonState();
+        }
 
         lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
         if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
@@ -587,6 +725,7 @@
         if (!gameOver && SETTINGS.opponent === 'ai' && turn === 'b') {
             makeAIMove();
         }
+        updateClaimButtonState();
     }
 
     function undoMove() {
@@ -597,7 +736,14 @@
         const performUndo = () => {
             if (aiTimer) clearTimeout(aiTimer);
             const state = JSON.parse(history.pop());
-            board = state.board; turn = state.turn; lastMove = state.lastMove; times = state.times; gameOver = false;
+            board = state.board;
+            turn = state.turn;
+            lastMove = state.lastMove;
+            times = state.times;
+            halfmoveClock = state.halfmoveClock || 0;
+            positionStack = state.positionStack || [];
+            positionCount = new Map(state.positionCount || []);
+            gameOver = false;
         };
 
         performUndo();
@@ -607,11 +753,25 @@
         }
 
         if (!history.length) undoBtn.disabled = true;
-        selected = null; rebuildGraveyard(); drawBoard(); updateStatus(); applyVisualSettings(); updateTimerDisplay();
+        selected = null;
+        rebuildGraveyard();
+        drawBoard();
+        updateStatus();
+        applyVisualSettings();
+        updateTimerDisplay();
+        updateClaimButtonState();
     }
 
     function pushHistory() {
-        history.push(JSON.stringify({ board: board, turn: turn, lastMove: lastMove, times: {...times} }));
+        history.push(JSON.stringify({
+            board: board,
+            turn: turn,
+            lastMove: lastMove,
+            times: { ...times },
+            halfmoveClock: halfmoveClock,
+            positionStack: [...positionStack],
+            positionCount: Array.from(positionCount.entries())
+        }));
         if (history.length > 50) history.shift();
         undoBtn.disabled = false;
     }
