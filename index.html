@@ -453,7 +453,7 @@
     function updateClaimButtonState() {
         const btn = document.getElementById('claimDrawBtn');
         if (!btn) return;
-        btn.disabled = !canClaimDraw();
+        btn.disabled = gameOver || !canClaimDraw();
         btn.title = btn.disabled ? 'Недоступно: повторений < 3 и < 50 ходов' : '';
     }
 
@@ -685,7 +685,20 @@
         }
 
         board[toR][toC] = p; board[fromR][fromC] = null; p.moved = true;
-        if (p.type === 'p' && (toR === 0 || toR === 7)) { p.type = 'q'; moveSound = 'check'; }
+        if (p.type === 'p' && (toR === 0 || toR === 7)) {
+            // Превращение пешки: выбор фигуры (для ИИ — ферзь)
+            if (SETTINGS.opponent === 'ai' && p.color === 'b') {
+                p.type = 'q';
+            } else {
+                const raw = (prompt('Превращение пешки: q(ферзь), r(ладья), b(слон), n(конь)', 'q') || 'q')
+                    .toLowerCase().trim();
+                p.type = ['q','r','b','n'].includes(raw) ? raw : 'q';
+            }
+            moveSound = 'check';
+        }
+
+        
+        lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
 
         // Турнирные правила: 50/75 ходов
         if (isPawnMove || isCapture) halfmoveClock = 0; else halfmoveClock++;
@@ -704,8 +717,7 @@
             updateClaimButtonState();
         }
 
-        lastMove = { fr: fromR, fc: fromC, tr: toR, tc: toC };
-        if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
+if (timeConfig.active) { times[turn] += timeConfig.inc; updateTimerDisplay(); }
         
         turn = turn === 'w' ? 'b' : 'w'; selected = null;
         rebuildGraveyard();
@@ -991,11 +1003,46 @@
     }
     function isInsufficientMaterial() {
         const pieces = board.flat().filter(p => p);
-        if (pieces.length === 2) return true; // Только короли (K vs K)
-        if (pieces.length === 3) {
-            const minors = pieces.filter(p => p.type === 'n' || p.type === 'b');
-            return minors.length === 1; // K+N vs K или K+B vs K
+        // "Мёртвая позиция": мат невозможен никакой серией легальных ходов.
+        // Реализованы типовые случаи без пешек и без тяжёлых фигур.
+        const nonKings = pieces.filter(p => p.type !== 'k');
+
+        // Любые пешки/ферзи/ладьи исключают "мёртвую" позицию.
+        if (nonKings.some(p => p.type === 'p' || p.type === 'q' || p.type === 'r')) return false;
+
+        // Только короли
+        if (nonKings.length === 0) return true;
+
+        // Одна лёгкая фигура (K+N vs K, K+B vs K)
+        if (nonKings.length === 1) return true;
+
+        // Разрешаем только комбинации из слонов/коней
+        if (nonKings.some(p => p.type !== 'b' && p.type !== 'n')) return false;
+
+        // Подсчёт по сторонам
+        const count = { w: { b: 0, n: 0 }, b: { b: 0, n: 0 } };
+        nonKings.forEach(p => count[p.color][p.type]++);
+
+        // Если у любой стороны есть 2 слона — мат возможен (K+BB vs K)
+        if (count.w.b >= 2 || count.b.b >= 2) return false;
+
+        // Если у любой стороны есть слон+конь — мат возможен (K+B+N vs K)
+        if ((count.w.b >= 1 && count.w.n >= 1) || (count.b.b >= 1 && count.b.n >= 1)) return false;
+
+        // K+NN vs K — мат невозможен
+        if ((count.w.n === 2 && count.w.b === 0 && count.b.n === 0 && count.b.b === 0) ||
+            (count.b.n === 2 && count.b.b === 0 && count.w.n === 0 && count.w.b === 0)) {
+            return true;
         }
+
+        // Две фигуры в сумме (по одной на сторону):
+        // K+N vs K+N, K+B vs K+B, K+B vs K+N — мат невозможен
+        if (nonKings.length === 2 &&
+            count.w.b + count.w.n === 1 &&
+            count.b.b + count.b.n === 1) {
+            return true;
+        }
+
         return false;
     }
     function isStalemate(c) { return !isCheck(c, board) && isMate(c); }
